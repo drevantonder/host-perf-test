@@ -4,4 +4,8 @@ import { defineNitroConfig } from "nitropack/config"
 export default defineNitroConfig({
   compatibilityDate: "latest",
   srcDir: "server",
+  cloudflare: {
+    deployConfig: true,
+    nodeCompat: true
+  }
 });
