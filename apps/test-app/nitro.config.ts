@@ -7,5 +7,9 @@ export default defineNitroConfig({
   cloudflare: {
     deployConfig: true,
     nodeCompat: true
+  },
+
+  runtimeConfig: {
+    neonUrl: process.env.NITRO_NEON_URL,
   }
 });
