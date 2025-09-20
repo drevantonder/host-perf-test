@@ -1,0 +1,14 @@
+{
+  "name": "benchmark",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx index.ts"
+  },
+  "dependencies": {
+    "playwright": "^1.55.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.5"
+  }
+}
