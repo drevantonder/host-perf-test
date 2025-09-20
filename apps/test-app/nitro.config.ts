@@ -2,7 +2,7 @@ import { defineNitroConfig } from "nitropack/config"
 
 // https://nitro.build/config
 export default defineNitroConfig({
-  compatibilityDate: "latest",
+  compatibilityDate: "2025-09-20",
   srcDir: "server",
   cloudflare: {
     deployConfig: true,
