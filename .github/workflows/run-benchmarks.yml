@@ -4,8 +4,6 @@ on:
   workflow_run:
     workflows: ["Deploy Benchmark Runner"]
     types: [completed]
-  schedule:
-    - cron: "0 */6 * * *"
   workflow_dispatch:
 
 permissions:
