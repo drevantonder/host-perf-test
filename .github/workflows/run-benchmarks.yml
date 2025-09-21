@@ -21,6 +21,7 @@ jobs:
       github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     strategy:
+      max-parallel: 1
       matrix:
         region: [iad, lhr, syd]
     steps:
@@ -50,11 +51,19 @@ jobs:
           APP_HOST: ${{ steps.host.outputs.host }}
           BENCH_TOKEN: ${{ secrets.BENCH_TOKEN }}
         run: |
-          curl -fsS \
-            -H "fly-prefer-region: ${{ matrix.region }}" \
-            -H "Authorization: Bearer $BENCH_TOKEN" \
-            "https://$APP_HOST/run?runs=10&label=${{ matrix.region }}" \
-            -o result-${{ matrix.region }}.json
+          for i in {1..30}; do
+            set +e
+            curl -fsS \
+              -H "fly-prefer-region: ${{ matrix.region }}" \
+              -H "Authorization: Bearer $BENCH_TOKEN" \
+              "https://$APP_HOST/run?runs=10&label=${{ matrix.region }}" \
+              -o result-${{ matrix.region }}.json
+            EC=$?
+            set -e
+            if [ $EC -eq 0 ]; then echo "Run succeeded"; break; fi
+            echo "Run failed (attempt $i), retrying in 10s..."; sleep 10;
+          done
+          test -s result-${{ matrix.region }}.json || { echo "No result after retries" >&2; exit 22; }
       - name: Upload result
         uses: actions/upload-artifact@v4
         with:
