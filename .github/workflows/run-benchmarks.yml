@@ -27,6 +27,9 @@ jobs:
     steps:
       - name: Setup Flyctl
         uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
       - name: Discover app hostname
         id: host
         env:
@@ -45,25 +48,21 @@ jobs:
           for i in {1..30}; do
             if curl -fsS -H "fly-prefer-region: ${{ matrix.region }}" https://$APP_HOST/healthz > /dev/null; then
               echo "Healthy in ${{ matrix.region }}"; break; fi; sleep 5; done
-      - name: Run benchmark via /run
+      - name: Run benchmark via /run (retry on 409)
         id: run
         env:
           APP_HOST: ${{ steps.host.outputs.host }}
           BENCH_TOKEN: ${{ secrets.BENCH_TOKEN }}
         run: |
           for i in {1..30}; do
-            set +e
-            curl -fsS \
+            status=$(curl -s -o result-${{ matrix.region }}.json -w "%{http_code}" \
               -H "fly-prefer-region: ${{ matrix.region }}" \
               -H "Authorization: Bearer $BENCH_TOKEN" \
-              "https://$APP_HOST/run?runs=10&label=${{ matrix.region }}" \
-              -o result-${{ matrix.region }}.json
-            EC=$?
-            set -e
-            if [ $EC -eq 0 ]; then echo "Run succeeded"; break; fi
-            echo "Run failed (attempt $i), retrying in 10s..."; sleep 10;
+              "https://$APP_HOST/run?runs=10&label=${{ matrix.region }}")
+            if [ "$status" = "200" ]; then echo "Run succeeded"; break; fi
+            if [ "$status" = "409" ]; then echo "Busy, retrying..."; sleep 10; continue; fi
+            echo "Unexpected status $status"; cat result-${{ matrix.region }}.json; exit 1
           done
-          test -s result-${{ matrix.region }}.json || { echo "No result after retries" >&2; exit 22; }
       - name: Upload result
         uses: actions/upload-artifact@v4
         with:

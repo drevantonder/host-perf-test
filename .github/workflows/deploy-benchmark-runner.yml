@@ -35,18 +35,11 @@ jobs:
         run: |
           flyctl deploy --config apps/benchmark/fly.toml --build-arg BUILDKIT_INLINE_CACHE=1 --remote-only
 
-      - name: Ensure one machine per region (iad,lhr,syd)
+      - name: Pin regions
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
-          # Ensure at least one machine exists; launch in primary if none
-          if ! flyctl machines list --app $APP_NAME | awk 'NR>1{print}' | grep -q .; then
-            echo "No machines found; launching one in primary region"
-            flyctl machines launch --app $APP_NAME --region iad --yes || true
-          fi
-
-          # Scale counts to 1 per region using fly scale count
-          flyctl scale count iad=1 lhr=1 syd=1 --app $APP_NAME || true
+          flyctl regions set iad lhr syd --app $APP_NAME || true
 
       - name: Show status
         env:
