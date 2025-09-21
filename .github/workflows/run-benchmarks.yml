@@ -42,7 +42,7 @@ jobs:
           APP_HOST: ${{ steps.host.outputs.host }}
         run: |
           for i in {1..30}; do
-            if curl -fsS -H "fly-prefer-region: ${{ matrix.region }}" https://$APP_HOST/healthz > /dev/null; then
+          if curl -fsS -H "fly-replay: region=${{ matrix.region }}" https://$APP_HOST/healthz > /dev/null; then
               echo "Healthy in ${{ matrix.region }}"; break; fi; sleep 5; done
       - name: Run benchmark via /run
         id: run
