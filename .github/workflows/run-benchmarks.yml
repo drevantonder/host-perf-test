@@ -44,7 +44,7 @@ jobs:
           for i in {1..60}; do
             if flyctl checks list -a "$APP_NAME" --json | jq -e \
               --arg r "${{ matrix.region }}" \
-              'map(select(.region==$r and .status=="passing"))|length>0' > /dev/null; then
+              '[ .. | objects | (with_entries(.key|=ascii_downcase)) | select(.region? == $r and .status? == "passing") ] | length > 0' > /dev/null; then
               echo "Checks passing in ${{ matrix.region }}"; exit 0
             fi
             sleep 5
