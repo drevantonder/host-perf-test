@@ -75,28 +75,175 @@ jobs:
           node -e '
             const fs = require("fs");
             const path = require("path");
+
+            function percentile(values, p) {
+              if (!values.length) return 0;
+              const s = [...values].sort((a, b) => a - b);
+              const idx = Math.ceil((p / 100) * s.length) - 1;
+              return s[idx];
+            }
+
             const dir = "artifacts";
             const files = fs.readdirSync(dir, { withFileTypes: true })
-              .flatMap(d => d.isDirectory() ? fs.readdirSync(path.join(dir, d.name)).map(f => path.join(dir, d.name, f)) : [path.join(dir, d.name)] )
+              .flatMap(d => d.isDirectory() ? fs.readdirSync(path.join(dir, d.name)).map(f => path.join(dir, d.name, f)) : [path.join(dir, d.name)])
               .filter(f => f.endsWith(".json"));
             const items = files.map(f => JSON.parse(fs.readFileSync(f, "utf8")));
             const combined = { items };
             fs.writeFileSync("combined.json", JSON.stringify(combined, null, 2));
 
-            const lines = [];
-            lines.push("## Benchmark Summary\n");
+            const regions = new Set();
+            const perRegionRouteHost = {}; // region -> route -> host -> { ttfb:[], ttlb:[] }
+            const perRouteHost = {}; // route -> host -> { ttfb:[], ttlb:[] }
+            const overallHost = {}; // host -> { ttfb:[], ttlb:[] }
+
             for (const it of items) {
-              const label = it.meta?.label || "unknown";
-              lines.push(`### Region: ${label}`);
-              lines.push("\n| Host | TTLB p50 (ms) |\n|---|---|\n");
-              const byHost = it.overallByHost || [];
-              const best = byHost.reduce((a,b)=>a && a.ttlbP50<=b.ttlbP50?a:b, null);
-              for (const h of byHost) {
-                const tag = best && h.host===best.host ? " ← best" : "";
-                lines.push(`| ${h.host} | ${h.ttlbP50.toFixed(2)}${tag} |`);
+              const region = (it.meta && it.meta.label) || "unknown";
+              regions.add(region);
+              const results = it.results || {};
+              for (const url in results) {
+                let host = url;
+                let route = url;
+                try {
+                  const u = new URL(url);
+                  host = u.host;
+                  route = u.pathname || "/";
+                } catch {}
+                const arr = results[url] || [];
+                perRegionRouteHost[region] = perRegionRouteHost[region] || {};
+                perRegionRouteHost[region][route] = perRegionRouteHost[region][route] || {};
+                const rrh = perRegionRouteHost[region][route][host] = perRegionRouteHost[region][route][host] || { ttfb: [], ttlb: [] };
+                perRouteHost[route] = perRouteHost[route] || {};
+                const prh = perRouteHost[route][host] = perRouteHost[route][host] || { ttfb: [], ttlb: [] };
+                const oh = overallHost[host] = overallHost[host] || { ttfb: [], ttlb: [] };
+                for (const r of arr) {
+                  if (typeof r.ttfb === "number") { rrh.ttfb.push(r.ttfb); prh.ttfb.push(r.ttfb); oh.ttfb.push(r.ttfb); }
+                  if (typeof r.ttlb === "number") { rrh.ttlb.push(r.ttlb); prh.ttlb.push(r.ttlb); oh.ttlb.push(r.ttlb); }
+                }
               }
-              lines.push("\n");
             }
+
+            function fmtMs(v) { return v.toFixed(2); }
+            function deltasForBest(map) {
+              const entries = Object.entries(map);
+              if (!entries.length) return { bestTTFB: null, bestTTLB: null, rows: [] };
+              const bestTTFB = entries.reduce((a, b) => (a && a[1].ttfbP50 <= b[1].ttfbP50) ? a : b);
+              const bestTTLB = entries.reduce((a, b) => (a && a[1].ttlbP50 <= b[1].ttlbP50) ? a : b);
+              const rows = entries.map(([host, v]) => {
+                const ttfbDelta = v.ttfbP50 - bestTTFB[1].ttfbP50;
+                const ttfbPct = bestTTFB[1].ttfbP50 > 0 ? (ttfbDelta / bestTTFB[1].ttfbP50) * 100 : 0;
+                const ttlbDelta = v.ttlbP50 - bestTTLB[1].ttlbP50;
+                const ttlbPct = bestTTLB[1].ttlbP50 > 0 ? (ttlbDelta / bestTTLB[1].ttlbP50) * 100 : 0;
+                const ttfbRatio = bestTTFB[1].ttfbP50 > 0 ? v.ttfbP50 / bestTTFB[1].ttfbP50 : 1;
+                const ttlbRatio = bestTTLB[1].ttlbP50 > 0 ? v.ttlbP50 / bestTTLB[1].ttlbP50 : 1;
+                return {
+                  host,
+                  ...v,
+                  ttfbDelta, ttfbPct, ttfbRatio,
+                  ttlbDelta, ttlbPct, ttlbRatio,
+                  isBestTTFB: host === bestTTFB[0],
+                  isBestTTLB: host === bestTTLB[0]
+                };
+              });
+              return { bestTTFB, bestTTLB, rows };
+            }
+
+            const lines = [];
+            lines.push("## Benchmark Summary");
+            lines.push("");
+
+            for (const region of Array.from(regions)) {
+              lines.push(`### Region: ${region}`);
+              const regionMap = perRegionRouteHost[region] || {};
+              for (const route of Object.keys(regionMap)) {
+                const byHost = regionMap[route];
+                const table = {};
+                for (const host of Object.keys(byHost)) {
+                  const v = byHost[host];
+                  table[host] = {
+                    ttfbP50: percentile(v.ttfb, 50),
+                    ttfbP75: percentile(v.ttfb, 75),
+                    ttfbP95: percentile(v.ttfb, 95),
+                    ttlbP50: percentile(v.ttlb, 50),
+                    ttlbP75: percentile(v.ttlb, 75),
+                    ttlbP95: percentile(v.ttlb, 95)
+                  };
+                }
+                const { rows } = deltasForBest(table);
+                lines.push(`Route: ${route}`);
+                lines.push("");
+                lines.push("| Host | TTFB p50 | TTFB p75 | TTFB p95 | ΔTTFB | TTLB p50 | TTLB p75 | TTLB p95 | ΔTTLB |");
+                lines.push("|---|---:|---:|---:|---:|---:|---:|---:|---:|");
+                for (const r of rows.sort((a, b) => a.ttlbP50 - b.ttlbP50)) {
+                  const ttag = r.isBestTTFB ? " ← best" : "";
+                  const btag = r.isBestTTLB ? " ← best" : "";
+                  lines.push(`| ${r.host} | ${fmtMs(r.ttfbP50)}${ttag} | ${fmtMs(r.ttfbP75)} | ${fmtMs(r.ttfbP95)} | +${fmtMs(r.ttfbDelta)}ms (+${r.ttfbPct.toFixed(1)}%) | ${fmtMs(r.ttlbP50)}${btag} | ${fmtMs(r.ttlbP75)} | ${fmtMs(r.ttlbP95)} | +${fmtMs(r.ttlbDelta)}ms (+${r.ttlbPct.toFixed(1)}%) |`);
+                }
+                lines.push("");
+              }
+            }
+
+            lines.push("### Per Route Across Regions");
+            for (const route of Object.keys(perRouteHost)) {
+              const byHost = perRouteHost[route];
+              const table = {};
+              for (const host of Object.keys(byHost)) {
+                const v = byHost[host];
+                  table[host] = {
+                    ttfbP50: percentile(v.ttfb, 50),
+                    ttfbP75: percentile(v.ttfb, 75),
+                    ttfbP95: percentile(v.ttfb, 95),
+                    ttlbP50: percentile(v.ttlb, 50),
+                    ttlbP75: percentile(v.ttlb, 75),
+                    ttlbP95: percentile(v.ttlb, 95)
+                  };
+              }
+              const { rows } = deltasForBest(table);
+              lines.push(`Route: ${route}`);
+              lines.push("");
+              lines.push("| Host | TTFB p50 | TTFB p75 | TTFB p95 | ΔTTFB | TTLB p50 | TTLB p75 | TTLB p95 | ΔTTLB |");
+              lines.push("|---|---:|---:|---:|---:|---:|---:|---:|---:|");
+              for (const r of rows.sort((a, b) => a.ttlbP50 - b.ttlbP50)) {
+                lines.push(`| ${r.host} | ${fmtMs(r.ttfbP50)} | ${fmtMs(r.ttfbP75)} | ${fmtMs(r.ttfbP95)} | +${fmtMs(r.ttfbDelta)}ms (+${r.ttfbPct.toFixed(1)}%) | ${fmtMs(r.ttlbP50)} | ${fmtMs(r.ttlbP75)} | ${fmtMs(r.ttlbP95)} | +${fmtMs(r.ttlbDelta)}ms (+${r.ttlbPct.toFixed(1)}%) |`);
+              }
+              lines.push("");
+            }
+
+            lines.push("### Overall Across Domains");
+            const overallTable = {};
+            for (const host of Object.keys(overallHost)) {
+              const v = overallHost[host];
+              overallTable[host] = {
+                ttfbP50: percentile(v.ttfb, 50),
+                ttfbP75: percentile(v.ttfb, 75),
+                ttfbP95: percentile(v.ttfb, 95),
+                ttlbP50: percentile(v.ttlb, 50),
+                ttlbP75: percentile(v.ttlb, 75),
+                ttlbP95: percentile(v.ttlb, 95)
+              };
+            }
+            const { rows: overallRows } = deltasForBest(overallTable);
+
+            lines.push("");
+            lines.push("| Host | TTFB p50 | TTFB p75 | TTFB p95 | ΔTTFB | TTLB p50 | TTLB p75 | TTLB p95 | ΔTTLB |");
+            lines.push("|---|---:|---:|---:|---:|---:|---:|---:|---:|");
+            for (const r of overallRows.sort((a, b) => a.ttlbP50 - b.ttlbP50)) {
+              lines.push(`| ${r.host} | ${fmtMs(r.ttfbP50)} | ${fmtMs(r.ttfbP75)} | ${fmtMs(r.ttfbP95)} | +${fmtMs(r.ttfbDelta)}ms (+${r.ttfbPct.toFixed(1)}%) | ${fmtMs(r.ttlbP50)} | ${fmtMs(r.ttlbP75)} | ${fmtMs(r.ttlbP95)} | +${fmtMs(r.ttlbDelta)}ms (+${r.ttlbPct.toFixed(1)}%) |`);
+            }
+            lines.push("");
+
+            if (overallRows.length >= 2) {
+              const sorted = [...overallRows].sort((a, b) => a.ttlbP50 - b.ttlbP50);
+              const fastest = sorted[0];
+              const second = sorted[1];
+              const ttlbRatio = second.ttlbP50 > 0 ? (second.ttlbP50 / fastest.ttlbP50) : 1;
+              const ttfbSorted = [...overallRows].sort((a, b) => a.ttfbP50 - b.ttfbP50);
+              const fastestTtfb = ttfbSorted[0];
+              const secondTtfb = ttfbSorted[1] || fastestTtfb;
+              const ttfbRatio = secondTtfb.ttfbP50 > 0 ? (secondTtfb.ttfbP50 / fastestTtfb.ttfbP50) : 1;
+              lines.push(`**Final Verdict (TTLB):** ${fastest.host} is ${ttlbRatio.toFixed(2)}x faster than ${second.host}.`);
+              lines.push(`**Final Verdict (TTFB):** ${fastestTtfb.host} is ${ttfbRatio.toFixed(2)}x faster than ${secondTtfb.host}.`);
+            }
+
             fs.writeFileSync("SUMMARY.md", lines.join("\n"));
           '
       - name: Upload combined.json

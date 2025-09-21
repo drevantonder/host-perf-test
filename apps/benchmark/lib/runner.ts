@@ -8,7 +8,7 @@ export type PerUrlSummary = {
   ttlb: { p50: number; p75: number; p95: number; max: number };
 };
 
-export type OverallByHost = { host: string; ttlbP50: number }[];
+export type OverallByHost = { host: string; ttfbP50: number; ttlbP50: number }[];
 
 export type BenchmarkResult = {
   resultsMap: Record<string, Metrics[]>;
@@ -150,19 +150,22 @@ export async function benchmark(urls: string[], runs = 5, log = true): Promise<B
     };
   });
 
-  const byHost: Record<string, number[]> = {};
+  const byHost: Record<string, { ttfb: number[]; ttlb: number[] }> = {};
   for (const u of urls) {
     let host = u;
     try {
       host = new URL(u).host;
     } catch {}
+    const ttfbVals = resultsMap[u].map((r) => r.ttfb);
     const ttlbVals = resultsMap[u].map((r) => r.ttlb);
-    if (!byHost[host]) byHost[host] = [];
-    byHost[host].push(...ttlbVals);
+    if (!byHost[host]) byHost[host] = { ttfb: [], ttlb: [] };
+    byHost[host].ttfb.push(...ttfbVals);
+    byHost[host].ttlb.push(...ttlbVals);
   }
   const overallByHost: OverallByHost = Object.entries(byHost).map(([host, vals]) => ({
     host,
-    ttlbP50: stat(vals, 50),
+    ttfbP50: stat(vals.ttfb, 50),
+    ttlbP50: stat(vals.ttlb, 50),
   }));
 
   return { resultsMap, perUrlSummary, overallByHost };

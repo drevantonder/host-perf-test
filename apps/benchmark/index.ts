@@ -13,7 +13,7 @@ type PerUrlSummary = {
   ttlb: { p50: number; p75: number; p95: number; max: number };
 };
 
-type OverallByHost = { host: string; ttlbP50: number }[];
+type OverallByHost = { host: string; ttfbP50: number; ttlbP50: number }[];
 
 type BenchmarkJson = {
   meta: {
