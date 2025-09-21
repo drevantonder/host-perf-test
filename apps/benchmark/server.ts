@@ -9,8 +9,6 @@ import { benchmark } from "./lib/runner";
 const PORT = Number(process.env.PORT || 8080);
 const TOKEN = (process.env.BENCH_TOKEN || "").trim();
 
-let running = false;
-
 function ok(res: ServerResponse, obj: any) {
   const payload = JSON.stringify(obj, null, 2);
   res.statusCode = 200;
@@ -49,7 +47,7 @@ const server = createServer(async (req, res) => {
 
   // health
   if (req.method === "GET" && path === "/healthz") {
-    return ok(res, { status: "ok", running });
+    return ok(res, { status: "ok" });
   }
 
   // run
@@ -61,15 +59,12 @@ const server = createServer(async (req, res) => {
       }
     }
 
-    if (running) return bad(res, 409, "benchmark already running");
-
     const params = u.searchParams;
     const runs = Math.max(1, Number(params.get("runs") || "10"));
     const label = params.get("label") || process.env.FLY_REGION || null;
     let urls = parseUrls(params.get("urls"));
     if (!urls.length) urls = defaultUrls;
 
-    running = true;
     try {
       const { resultsMap, perUrlSummary, overallByHost } = await benchmark(
         urls,
@@ -89,8 +84,6 @@ const server = createServer(async (req, res) => {
       });
     } catch (e: any) {
       return bad(res, 500, String(e?.stack || e));
-    } finally {
-      running = false;
     }
   }
 
