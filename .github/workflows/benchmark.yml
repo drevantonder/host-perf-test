@@ -12,7 +12,7 @@ permissions:
 
 env:
   REGIONS: '["iad","lhr","syd"]'
-  APP_NAME: host-perf-benchmark
+  APP_NAME: host-perf-test
 
 jobs:
   build-image:
