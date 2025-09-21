@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsx index.ts",
-    "start": "tsx index.ts"
+    "start": "tsx index.ts",
+    "start:server": "tsx server.ts"
   },
   "dependencies": {
     "playwright": "^1.55.0"

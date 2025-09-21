@@ -19,5 +19,7 @@ COPY apps/benchmark apps/benchmark
 WORKDIR /work/apps/benchmark
 ENV NODE_ENV=production
 
-# Default command; args can be appended and/or EXTRA_ARGS env used
-CMD ["pnpm", "start"]
+EXPOSE 8080
+
+# Default command runs the HTTP server; CLI still available via pnpm start
+CMD ["pnpm", "start:server"]

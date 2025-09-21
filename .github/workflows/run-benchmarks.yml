@@ -1,0 +1,107 @@
+name: Run Benchmarks
+
+on:
+  workflow_run:
+    workflows: ["Deploy Benchmark Runner"]
+    types: [completed]
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  APP_NAME: host-perf-test
+  REGIONS: 'iad lhr syd'
+
+jobs:
+  run:
+    if: |
+      github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        region: [iad, lhr, syd]
+    steps:
+      - name: Setup Flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Discover app hostname
+        id: host
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          APP_HOST=$(flyctl status --app $APP_NAME --json | jq -r '.Hostname // .hostname // empty')
+          if [ -z "$APP_HOST" ]; then
+            echo "Failed to get hostname for $APP_NAME" >&2
+            exit 1
+          fi
+          echo "host=$APP_HOST" >> $GITHUB_OUTPUT
+      - name: Wait for healthy in region
+        env:
+          APP_HOST: ${{ steps.host.outputs.host }}
+        run: |
+          for i in {1..30}; do
+            if curl -fsS -H "fly-prefer-region: ${{ matrix.region }}" https://$APP_HOST/healthz > /dev/null; then
+              echo "Healthy in ${{ matrix.region }}"; break; fi; sleep 5; done
+      - name: Run benchmark via /run
+        id: run
+        env:
+          APP_HOST: ${{ steps.host.outputs.host }}
+          BENCH_TOKEN: ${{ secrets.BENCH_TOKEN }}
+        run: |
+          curl -fsS \
+            -H "fly-prefer-region: ${{ matrix.region }}" \
+            -H "Authorization: Bearer $BENCH_TOKEN" \
+            "https://$APP_HOST/run?runs=10&label=${{ matrix.region }}" \
+            -o result-${{ matrix.region }}.json
+      - name: Upload result
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-${{ matrix.region }}
+          path: result-${{ matrix.region }}.json
+
+  aggregate:
+    needs: run
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Merge and summarize
+        run: |
+          node -e '
+            const fs = require("fs");
+            const path = require("path");
+            const dir = "artifacts";
+            const files = fs.readdirSync(dir, { withFileTypes: true })
+              .flatMap(d => d.isDirectory() ? fs.readdirSync(path.join(dir, d.name)).map(f => path.join(dir, d.name, f)) : [path.join(dir, d.name)] )
+              .filter(f => f.endsWith(".json"));
+            const items = files.map(f => JSON.parse(fs.readFileSync(f, "utf8")));
+            const combined = { items };
+            fs.writeFileSync("combined.json", JSON.stringify(combined, null, 2));
+
+            const lines = [];
+            lines.push("## Benchmark Summary\n");
+            for (const it of items) {
+              const label = it.meta?.label || "unknown";
+              lines.push(`### Region: ${label}`);
+              lines.push("\n| Host | TTLB p50 (ms) |\n|---|---|\n");
+              const byHost = it.overallByHost || [];
+              const best = byHost.reduce((a,b)=>a && a.ttlbP50<=b.ttlbP50?a:b, null);
+              for (const h of byHost) {
+                const tag = best && h.host===best.host ? " ← best" : "";
+                lines.push(`| ${h.host} | ${h.ttlbP50.toFixed(2)}${tag} |`);
+              }
+              lines.push("\n");
+            }
+            fs.writeFileSync("SUMMARY.md", lines.join("\n"));
+          '
+      - name: Upload combined.json
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-combined
+          path: combined.json
+      - name: Job Summary
+        run: cat SUMMARY.md >> $GITHUB_STEP_SUMMARY

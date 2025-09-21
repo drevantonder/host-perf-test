@@ -1,0 +1,65 @@
+name: Deploy Benchmark Runner
+
+on:
+  push:
+    paths:
+      - 'apps/benchmark/**'
+      - '.github/workflows/deploy-benchmark-runner.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  APP_NAME: host-perf-test
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Ensure app exists
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          flyctl apps show $APP_NAME || flyctl apps create $APP_NAME
+
+      - name: Deploy runner
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          flyctl deploy --config apps/benchmark/fly.toml --build-arg BUILDKIT_INLINE_CACHE=1 --remote-only
+
+      - name: Pin regions and scale to one per region
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          flyctl regions set iad lhr syd --app $APP_NAME || true
+          # Ensure at least one machine exists; launch in primary if none
+          if ! flyctl machines list --app $APP_NAME | awk 'NR>1{print}' | grep -q .; then
+            echo "No machines found; launching one in primary region"
+            flyctl machines launch --app $APP_NAME --region iad --yes || true
+          fi
+
+          # Try to clone to target regions if fewer than 3 machines
+          COUNT=$(flyctl machines list --app $APP_NAME | awk 'NR>1{print}' | wc -l)
+          if [ "$COUNT" -lt 3 ]; then
+            ID=$(flyctl machines list --app $APP_NAME | awk 'NR==2{print $1}')
+            for r in iad lhr syd; do
+              if ! flyctl machines list --app $APP_NAME | grep -q " $r "; then
+                echo "Cloning machine $ID to $r"
+                flyctl machines clone $ID --app $APP_NAME --region $r --yes || true
+              fi
+            done
+          fi
+
+      - name: Show status
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          flyctl status --app $APP_NAME
