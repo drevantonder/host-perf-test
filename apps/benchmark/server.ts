@@ -47,7 +47,8 @@ const server = createServer(async (req, res) => {
 
   // health
   if (req.method === "GET" && path === "/healthz") {
-    return ok(res, { status: "ok" });
+    const region = process.env.FLY_REGION || null;
+    return ok(res, { status: "ok", region });
   }
 
   // run

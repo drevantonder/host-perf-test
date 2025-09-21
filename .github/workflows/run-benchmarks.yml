@@ -41,9 +41,18 @@ jobs:
         env:
           APP_HOST: ${{ steps.host.outputs.host }}
         run: |
-          for i in {1..30}; do
-          if curl -fsS -H "fly-replay: region=${{ matrix.region }}" https://$APP_HOST/healthz > /dev/null; then
-              echo "Healthy in ${{ matrix.region }}"; break; fi; sleep 5; done
+          echo "Waiting for health in ${{ matrix.region }} at $APP_HOST ..."
+          ok=0
+          for i in {1..60}; do
+            if curl -fsS -H "fly-replay: region=${{ matrix.region }}" "https://$APP_HOST/healthz" > /dev/null; then
+              echo "Healthy in ${{ matrix.region }}"; ok=1; break
+            fi
+            sleep 5
+          done
+          if [ "$ok" -ne 1 ]; then
+            echo "App not healthy in ${{ matrix.region }} after 5 minutes" >&2
+            exit 1
+          fi
       - name: Run benchmark via /run
         id: run
         env:
