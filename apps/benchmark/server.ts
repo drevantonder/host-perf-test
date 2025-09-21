@@ -32,12 +32,12 @@ function parseUrls(s: string | null | undefined): string[] {
 
 const defaultUrls = [
   "https://host-perf-test-test-app.vercel.app/",
-  "https://host-perf-test-test-app.vercel.app/nano-jsx",
-  "https://host-perf-test-test-app.vercel.app/neon-db",
+  "https://host-perf-test-test-app.vercel.app/api/posts",
+  "https://host-perf-test-test-app.vercel.app/api/results",
   "https://host-perf-test-test-app.vercel.app/multiple-requests",
   "https://host-perf-test.drevan.workers.dev/",
-  "https://host-perf-test.drevan.workers.dev/nano-jsx",
-  "https://host-perf-test.drevan.workers.dev/neon-db",
+  "https://host-perf-test.drevan.workers.dev/api/posts",
+  "https://host-perf-test.drevan.workers.dev/api/results",
   "https://host-perf-test.drevan.workers.dev/multiple-requests",
 ];
 
