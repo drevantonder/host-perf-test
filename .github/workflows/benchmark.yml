@@ -75,7 +75,7 @@ jobs:
           flyctl machines run "$IMAGE" \
             --app $APP_NAME \
             --region ${{ matrix.region }} \
-            --attach --rm \
+            --rm \
             --env EXTRA_ARGS="--runs 10 --label ${{ matrix.region }} --json" | tee run.json
 
           # Extract JSON block from output (last JSON object)
