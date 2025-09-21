@@ -39,9 +39,9 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
-          flyctl scale count 1 --region iad
-          flyctl scale count 1 --region lhr
-          flyctl scale count 1 --region syd
+          flyctl scale count 1 --region iad --app $APP_NAME
+          flyctl scale count 1 --region lhr --app $APP_NAME
+          flyctl scale count 1 --region syd --app $APP_NAME
 
       - name: Show status
         env:
