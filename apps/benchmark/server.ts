@@ -73,8 +73,7 @@ const server = createServer(async (req, res) => {
     try {
       const { resultsMap, perUrlSummary, overallByHost } = await benchmark(
         urls,
-        runs,
-        false
+        runs
       );
       return ok(res, {
         meta: {
