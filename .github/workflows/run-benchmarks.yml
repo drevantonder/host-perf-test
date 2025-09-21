@@ -51,7 +51,7 @@ jobs:
           BENCH_TOKEN: ${{ secrets.BENCH_TOKEN }}
         run: |
           curl -fsS \
-            -H "fly-prefer-region: ${{ matrix.region }}" \
+            -H "fly-replay: region=${{ matrix.region }}" \
             -H "Authorization: Bearer $BENCH_TOKEN" \
             "https://$APP_HOST/run?runs=10&label=${{ matrix.region }}" \
             -o result-${{ matrix.region }}.json
