@@ -37,30 +37,20 @@ jobs:
             exit 1
           fi
           echo "host=$APP_HOST" >> $GITHUB_OUTPUT
-      - name: Wait for healthy in region
+      - name: Wait for checks passing in region
         env:
-          APP_HOST: ${{ steps.host.outputs.host }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
-          echo "Waiting for health in ${{ matrix.region }} at $APP_HOST ..."
-          ok=0
-          last_body=""
-          last_code=""
           for i in {1..60}; do
-            resp=$(curl -sS -H "fly-replay: region=${{ matrix.region }}" "https://$APP_HOST/healthz" -w "\n%{http_code}" || true)
-            last_code=$(printf "%s" "$resp" | tail -n1)
-            last_body=$(printf "%s" "$resp" | sed '$d')
-            status=$(printf "%s" "$last_body" | jq -r '.status // empty' 2>/dev/null || true)
-            region=$(printf "%s" "$last_body" | jq -r '.region // empty' 2>/dev/null || true)
-            if [ "$last_code" = "200" ] && [ "$status" = "ok" ] && [ "$region" = "${{ matrix.region }}" ]; then
-              echo "Healthy in ${{ matrix.region }} (server region=$region)"; ok=1; break
+            if flyctl checks list -a "$APP_NAME" --json | jq -e \
+              --arg r "${{ matrix.region }}" \
+              'map(select(.region==$r and .status=="passing"))|length>0' > /dev/null; then
+              echo "Checks passing in ${{ matrix.region }}"; exit 0
             fi
             sleep 5
           done
-          if [ "$ok" -ne 1 ]; then
-            echo "App not healthy in ${{ matrix.region }} after 5 minutes" >&2
-            echo "Last code=$last_code body=$last_body" >&2
-            exit 1
-          fi
+          echo "Checks not passing in ${{ matrix.region }} after 5 minutes" >&2
+          exit 1
       - name: Run benchmark via /run
         id: run
         env:
