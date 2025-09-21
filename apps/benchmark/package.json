@@ -3,12 +3,14 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx index.ts"
+    "dev": "tsx index.ts",
+    "start": "tsx index.ts"
   },
   "dependencies": {
     "playwright": "^1.55.0"
   },
   "devDependencies": {
+    "@types/node": "^22.7.4",
     "tsx": "^4.20.5"
   }
 }
