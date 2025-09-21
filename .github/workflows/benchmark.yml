@@ -1,0 +1,137 @@
+name: Multi-Region Benchmark (Fly.io)
+
+on:
+  push:
+    paths:
+      - 'apps/benchmark/**'
+      - '.github/workflows/benchmark.yml'
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGIONS: '["iad","lhr","syd"]'
+  APP_NAME: host-perf-benchmark
+
+jobs:
+  build-image:
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.build.outputs.image }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Setup Flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Build image (root context)
+        id: build
+        run: |
+          GHCR_IMAGE=ghcr.io/${{ github.repository }}-benchmark:${{ github.sha }}
+          FLY_IMAGE=registry.fly.io/$APP_NAME:${{ github.sha }}
+          echo "Building $GHCR_IMAGE"
+          docker build -f apps/benchmark/Dockerfile -t "$GHCR_IMAGE" .
+          echo "Pushing $GHCR_IMAGE"
+          docker push "$GHCR_IMAGE"
+          echo "Authenticating Docker with Fly registry"
+          flyctl auth docker
+          echo "Tagging $FLY_IMAGE"
+          docker tag "$GHCR_IMAGE" "$FLY_IMAGE"
+          echo "Pushing $FLY_IMAGE"
+          docker push "$FLY_IMAGE"
+          echo "image=$FLY_IMAGE" >> $GITHUB_OUTPUT
+
+  run-benchmark:
+    needs: build-image
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        region: [iad, lhr, syd]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Ensure app exists
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          flyctl apps show $APP_NAME || flyctl apps create $APP_NAME
+      - name: Run benchmark in ${{ matrix.region }}
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          IMAGE="${{ needs.build-image.outputs.image }}"
+          # Run an ephemeral machine and attach to logs
+          # We pass EXTRA_ARGS so the container CMD can use them
+          flyctl machines run "$IMAGE" \
+            --app $APP_NAME \
+            --region ${{ matrix.region }} \
+            --attach --rm \
+            --env EXTRA_ARGS="--runs 10 --label ${{ matrix.region }} --json" | tee run.json
+
+          # Extract JSON block from output (last JSON object)
+          node -e '
+          const fs = require("fs");
+          const txt = fs.readFileSync("run.json", "utf8");
+          const m = txt.match(/\{[\s\S]*\}\s*$/);
+          if (!m) { console.error("No JSON found in output"); process.exit(1); }
+          fs.writeFileSync("result-${{ matrix.region }}.json", m[0]);
+          '
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-${{ matrix.region }}
+          path: result-${{ matrix.region }}.json
+
+  aggregate:
+    needs: run-benchmark
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Merge and summarize
+        run: |
+          node -e '
+            const fs = require("fs");
+            const path = require("path");
+            const dir = "artifacts";
+            const files = fs.readdirSync(dir, { withFileTypes: true })
+              .flatMap(d => d.isDirectory() ? fs.readdirSync(path.join(dir, d.name)).map(f => path.join(dir, d.name, f)) : [path.join(dir, d.name)] )
+              .filter(f => f.endsWith(".json"));
+            const items = files.map(f => JSON.parse(fs.readFileSync(f, "utf8")));
+            const combined = { items };
+            fs.writeFileSync("combined.json", JSON.stringify(combined, null, 2));
+
+            // Build markdown summary of TTLB p50 by host per label
+            const lines = [];
+            lines.push("## Benchmark Summary\n");
+            for (const it of items) {
+              const label = it.meta?.label || "unknown";
+              lines.push(`### Region: ${label}`);
+              lines.push("\n| Host | TTLB p50 (ms) |\n|---|---|\n");
+              const byHost = it.overallByHost || [];
+              const best = byHost.reduce((a,b)=>a && a.ttlbP50<=b.ttlbP50?a:b, null);
+              for (const h of byHost) {
+                const tag = best && h.host===best.host ? " ← best" : "";
+                lines.push(`| ${h.host} | ${h.ttlbP50.toFixed(2)}${tag} |`);
+              }
+              lines.push("\n");
+            }
+            fs.writeFileSync("SUMMARY.md", lines.join("\n"));
+          '
+      - name: Upload combined.json
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-combined
+          path: combined.json
+      - name: Job Summary
+        run: cat SUMMARY.md >> $GITHUB_STEP_SUMMARY
