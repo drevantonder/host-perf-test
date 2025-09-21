@@ -32,6 +32,8 @@ jobs:
         uses: superfly/flyctl-actions/setup-flyctl@master
       - name: Build image (root context)
         id: build
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
           GHCR_IMAGE=ghcr.io/${{ github.repository }}-benchmark:${{ github.sha }}
           FLY_IMAGE=registry.fly.io/$APP_NAME:${{ github.sha }}
