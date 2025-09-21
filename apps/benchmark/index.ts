@@ -86,11 +86,11 @@ async function benchmark(urls: string[], runs = 5) {
 
       console.log(
         `  Best TTFB: ${bestTtfb.url} (${bestTtfb.r.ttfb.toFixed(2)}ms)` +
-          (ttfbOthers ? ` | Others: ${ttfbOthers}` : "")
+        (ttfbOthers ? ` | Others: ${ttfbOthers}` : "")
       );
       console.log(
         `  Best TTLB: ${bestTtlb.url} (${bestTtlb.r.ttlb.toFixed(2)}ms)` +
-          (ttlbOthers ? ` | Others: ${ttlbOthers}` : "")
+        (ttlbOthers ? ` | Others: ${ttlbOthers}` : "")
       );
     }
   }
@@ -121,7 +121,7 @@ async function benchmark(urls: string[], runs = 5) {
       let path = "/";
       try {
         path = new URL(u).pathname || "/";
-      } catch {}
+      } catch { }
       if (!byPath[path]) byPath[path] = [];
       byPath[path].push(u);
     }
@@ -176,7 +176,7 @@ async function benchmark(urls: string[], runs = 5) {
     const byHost: Record<string, number[]> = {};
     for (const u of urls) {
       let host = u;
-      try { host = new URL(u).host; } catch {}
+      try { host = new URL(u).host; } catch { }
       const ttlbVals = resultsMap[u].map((r) => r.ttlb);
       if (!byHost[host]) byHost[host] = [];
       byHost[host].push(...ttlbVals);
@@ -211,7 +211,9 @@ async function benchmark(urls: string[], runs = 5) {
 benchmark([
   "https://host-perf-test-test-app.vercel.app/",
   "https://host-perf-test-test-app.vercel.app/nano-jsx",
+  "https://host-perf-test-test-app.vercel.app/neon-db",
   "https://host-perf-test.drevan.workers.dev/",
-  "https://host-perf-test.drevan.workers.dev/nano-jsx"
-], 5);
+  "https://host-perf-test.drevan.workers.dev/nano-jsx",
+  "https://host-perf-test.drevan.workers.dev/neon-db"
+], 10);
 
