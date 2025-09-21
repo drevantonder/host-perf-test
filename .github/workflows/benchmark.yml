@@ -64,7 +64,8 @@ jobs:
           flyctl machines run "$IMAGE" \
             --app $APP_NAME \
             --region ${{ matrix.region }} \
-            --cmd "pnpm start -- --runs 10 --label ${{ matrix.region }} --json --out /tmp/result.json" | tee "$TMP_OUT"
+            --restart no \
+            --env EXTRA_ARGS="--runs 10 --label ${{ matrix.region }} --json --out /tmp/result.json" | tee "$TMP_OUT"
 
           INSTANCE_ID=$(awk -F': ' '/Instance ID:/ {id=$2} END{print id}' "$TMP_OUT")
           if [ -z "$INSTANCE_ID" ]; then
@@ -73,16 +74,18 @@ jobs:
           fi
 
           # Poll SFTP for result file
+          GOT=""
           for i in {1..60}; do
-            if flyctl sftp get --app $APP_NAME --instance "$INSTANCE_ID" /tmp/result.json "result-${{ matrix.region }}.json"; then
+            if flyctl sftp get --app $APP_NAME --machine "$INSTANCE_ID" /tmp/result.json "result-${{ matrix.region }}.json"; then
               echo "Downloaded result for ${{ matrix.region }}"
+              GOT=1
               break
             fi
-            echo "Waiting for result.json on instance $INSTANCE_ID... ($i)"
+            echo "Waiting for result.json on machine $INSTANCE_ID... ($i)"
             sleep 5
           done
 
-          if [ ! -s "result-${{ matrix.region }}.json" ]; then
+          if [ -z "$GOT" ] || [ ! -s "result-${{ matrix.region }}.json" ]; then
             echo "Failed to retrieve result JSON from machine $INSTANCE_ID"
             exit 1
           fi
