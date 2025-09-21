@@ -22,12 +22,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Setup Flyctl
         uses: superfly/flyctl-actions/setup-flyctl@master
       - name: Build image (root context)
@@ -35,16 +29,11 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
-          GHCR_IMAGE=ghcr.io/${{ github.repository }}-benchmark:${{ github.sha }}
           FLY_IMAGE=registry.fly.io/$APP_NAME:${{ github.sha }}
-          echo "Building $GHCR_IMAGE"
-          docker build -f apps/benchmark/Dockerfile -t "$GHCR_IMAGE" .
-          echo "Pushing $GHCR_IMAGE"
-          docker push "$GHCR_IMAGE"
           echo "Authenticating Docker with Fly registry"
           flyctl auth docker
-          echo "Tagging $FLY_IMAGE"
-          docker tag "$GHCR_IMAGE" "$FLY_IMAGE"
+          echo "Building $FLY_IMAGE"
+          docker build -f apps/benchmark/Dockerfile -t "$FLY_IMAGE" .
           echo "Pushing $FLY_IMAGE"
           docker push "$FLY_IMAGE"
           echo "image=$FLY_IMAGE" >> $GITHUB_OUTPUT
@@ -70,22 +59,36 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
           IMAGE="${{ needs.build-image.outputs.image }}"
-          # Run an ephemeral machine and attach to logs
-          # We pass EXTRA_ARGS so the container CMD can use them
+          TMP_OUT=$(mktemp)
+          echo "Starting machine from $IMAGE in ${{ matrix.region }}"
           flyctl machines run "$IMAGE" \
             --app $APP_NAME \
             --region ${{ matrix.region }} \
-            --rm \
-            --env EXTRA_ARGS="--runs 10 --label ${{ matrix.region }} --json" | tee run.json
+            --cmd "pnpm start -- --runs 10 --label ${{ matrix.region }} --json --out /tmp/result.json" | tee "$TMP_OUT"
 
-          # Extract JSON block from output (last JSON object)
-          node -e '
-          const fs = require("fs");
-          const txt = fs.readFileSync("run.json", "utf8");
-          const m = txt.match(/\{[\s\S]*\}\s*$/);
-          if (!m) { console.error("No JSON found in output"); process.exit(1); }
-          fs.writeFileSync("result-${{ matrix.region }}.json", m[0]);
-          '
+          INSTANCE_ID=$(awk -F': ' '/Instance ID:/ {id=$2} END{print id}' "$TMP_OUT")
+          if [ -z "$INSTANCE_ID" ]; then
+            echo "Could not parse Instance ID from machines run output:"
+            cat "$TMP_OUT"
+          fi
+
+          # Poll SFTP for result file
+          for i in {1..60}; do
+            if flyctl sftp get --app $APP_NAME --instance "$INSTANCE_ID" /tmp/result.json "result-${{ matrix.region }}.json"; then
+              echo "Downloaded result for ${{ matrix.region }}"
+              break
+            fi
+            echo "Waiting for result.json on instance $INSTANCE_ID... ($i)"
+            sleep 5
+          done
+
+          if [ ! -s "result-${{ matrix.region }}.json" ]; then
+            echo "Failed to retrieve result JSON from machine $INSTANCE_ID"
+            exit 1
+          fi
+
+          # Clean up the machine
+          flyctl machines destroy --app $APP_NAME "$INSTANCE_ID" -y || true
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
