@@ -212,8 +212,10 @@ benchmark([
   "https://host-perf-test-test-app.vercel.app/",
   "https://host-perf-test-test-app.vercel.app/nano-jsx",
   "https://host-perf-test-test-app.vercel.app/neon-db",
+  "https://host-perf-test-test-app.vercel.app/multiple-requests",
   "https://host-perf-test.drevan.workers.dev/",
   "https://host-perf-test.drevan.workers.dev/nano-jsx",
-  "https://host-perf-test.drevan.workers.dev/neon-db"
+  "https://host-perf-test.drevan.workers.dev/neon-db",
+  "https://host-perf-test.drevan.workers.dev/multiple-requests",
 ], 10);
 
