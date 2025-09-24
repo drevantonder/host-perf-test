@@ -23,6 +23,7 @@ export default defineNuxtConfig({
   nitro: {
     preset: 'cloudflare',
     cloudflare: {
+      deployConfig: true,
       wrangler: {
         d1_databases: [
           {
