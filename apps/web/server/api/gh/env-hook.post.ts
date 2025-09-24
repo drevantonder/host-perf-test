@@ -4,11 +4,11 @@ import { createAppJWT, createInstallationToken, approveViaCallback, approvePendi
 
 export default defineEventHandler(async (event) => {
   const cfg = useRuntimeConfig()
-  const webhookSecret = cfg.github?.webhookSecret || process.env.GITHUB_WEBHOOK_SECRET || ''
-  const appId = cfg.github?.appId || process.env.GITHUB_APP_ID || ''
-  const defaultInstId = cfg.github?.defaultInstallationId || process.env.GITHUB_APP_INSTALLATION_ID || ''
-  const privateKey = (cfg.github?.privateKey || process.env.GITHUB_APP_PRIVATE_KEY || '').trim()
-  const runnerHost = cfg.benchmarkRunnerHost || process.env.BENCHMARK_RUNNER_HOST || ''
+  const webhookSecret = cfg.github?.webhookSecret || ''
+  const appId = cfg.github?.appId || ''
+  const defaultInstId = cfg.github?.defaultInstallationId || ''
+  const privateKey = (cfg.github?.privateKey || '').trim()
+  const runnerHost = cfg.benchmarkRunnerHost
 
   const ghEvent = getRequestHeader(event, 'x-github-event') || ''
   const sig = getRequestHeader(event, 'x-hub-signature-256') || ''
