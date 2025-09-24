@@ -1,41 +1,33 @@
-export default defineEventHandler(async (event) => {
-  const db = event.context.cloudflare?.env?.DB
-  if (!db) {
-    throw createError({
-      statusCode: 500,
-      statusMessage: 'Database not available'
-    })
-  }
+import { desc, sql } from 'drizzle-orm'
 
+export default defineEventHandler(async (event) => {
   const query = getQuery(event)
   const limit = parseInt(query.limit as string) || 10
 
-  // Get recent benchmarks with their result counts
-  const benchmarksResult = await db.prepare(`
-    SELECT 
-      b.id,
-      b.status,
-      b.regions,
-      b.runs,
-      b.label,
-      b.created_at,
-      COUNT(br.id) as result_count
-    FROM benchmarks b
-    LEFT JOIN benchmark_results br ON b.id = br.benchmark_id
-    GROUP BY b.id
-    ORDER BY b.created_at DESC
-    LIMIT ?
-  `).bind(limit).all()
+  const db = useDb(event)
 
-  const benchmarks = (benchmarksResult.results as any[] || []).map(row => ({
+  // Fetch recent benchmarks with result counts
+  const recentBenchmarks = await db
+    .select({
+      id: tables.benchmarks.id,
+      status: tables.benchmarks.status,
+      regions: tables.benchmarks.regions,
+      runs: tables.benchmarks.runs,
+      label: tables.benchmarks.label,
+      createdAt: tables.benchmarks.createdAt,
+      resultCount: sql<number>`(SELECT COUNT(*) FROM benchmark_results br WHERE br.benchmark_id = ${tables.benchmarks.id})`
+    })
+    .from(tables.benchmarks)
+    .orderBy(desc(tables.benchmarks.createdAt))
+    .limit(limit)
+
+  return recentBenchmarks.map((row) => ({
     id: row.id,
     status: row.status,
     regions: JSON.parse(row.regions),
     runs: row.runs,
     label: row.label,
-    created_at: row.created_at,
-    result_count: row.result_count
+    created_at: row.createdAt,
+    result_count: row.resultCount
   }))
-
-  return benchmarks
 })

@@ -1,4 +1,4 @@
-import { FlyMachinesClient } from '../../lib/fly/machines'
+import { H3Event } from 'h3'
 
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
@@ -34,13 +34,13 @@ export default defineEventHandler(async (event) => {
   const benchmarkId = `bench_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`
   
   // Initialize benchmark run in database
-  const db = event.context.cloudflare?.env?.DB
-  if (db) {
-    await db.prepare(`
-      INSERT INTO benchmarks (id, status, regions, runs, label, created_at)
-      VALUES (?, 'running', ?, ?, ?, datetime('now'))
-    `).bind(benchmarkId, JSON.stringify(regions), runs, label).run()
-  }
+  await insertBenchmark(event, {
+    id: benchmarkId,
+    status: 'running',
+    regions,
+    runs,
+    label
+  })
 
   // Start benchmark runs for each region
   const runPromises = regions.map(async (region: string) => {
@@ -49,63 +49,61 @@ export default defineEventHandler(async (event) => {
       if (flyClient) {
         try {
           // Update status to warming up
-          if (db) {
-            await db.prepare(`
-              INSERT INTO benchmark_results (benchmark_id, region, result, error, status, progress, created_at, updated_at)
-              VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-            `).bind(benchmarkId, region, JSON.stringify({}), 'Warming up machine...', 'warming', 10,).run()
-          }
+          await insertBenchmarkResult(event, {
+            benchmarkId,
+            region,
+            result: {},
+            error: 'Warming up machine...',
+            status: 'warming',
+            progress: 10
+          })
           
           await flyClient.warmUpMachine(region)
           
           // Update status to warmed up
-          if (db) {
-            await db.prepare(`
-              UPDATE benchmark_results 
-              SET status = ?, progress = ?, updated_at = datetime('now')
-              WHERE benchmark_id = ? AND region = ?
-            `).bind('running', 20, benchmarkId, region).run()
-          }
+          await updateBenchmarkResult(event, benchmarkId, region, {
+            status: 'running',
+            progress: 20,
+            error: null,
+          })
         } catch (warmupError) {
           console.error(`Failed to warm up machine in region ${region}:`, warmupError)
           // Update status to failed warmup
-          if (db) {
-            await db.prepare(`
-              UPDATE benchmark_results 
-              SET error = ?, status = ?, updated_at = datetime('now')
-              WHERE benchmark_id = ? AND region = ?
-            `).bind(`Failed to warm up: ${(warmupError as Error).message}`, 'failed', benchmarkId, region).run()
-          }
+          await updateBenchmarkResult(event, benchmarkId, region, {
+            error: `Failed to warm up: ${(warmupError as Error).message}`,
+            status: 'failed'
+          })
           // Continue with benchmark even if warmup fails
         }
       } else {
         // No Fly client, just mark as running
-        if (db) {
-          await db.prepare(`
-            INSERT INTO benchmark_results (benchmark_id, region, result, error, status, progress, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-          `).bind(benchmarkId, region, JSON.stringify({}), null, 'running', 0).run()
-        }
+        await insertBenchmarkResult(event, {
+          benchmarkId,
+          region,
+          result: {},
+          status: 'running',
+          progress: 0
+        })
       }
 
       // Run benchmark with retry logic (mimicking GitHub Actions workflow)
       const result = await runBenchmarkWithRetry(
+        event,
         config.benchmarkRunnerHost,
         region,
         runs,
         label,
         benchToken,
-        db,
         benchmarkId
       )
       
       // Store result in database
-      if (db) {
-        await db.prepare(`
-          INSERT INTO benchmark_results (benchmark_id, region, result, created_at)
-          VALUES (?, ?, ?, datetime('now'))
-        `).bind(benchmarkId, region, JSON.stringify(result)).run()
-      }
+      await updateBenchmarkResult(event, benchmarkId, region, {
+        result,
+        status: 'completed',
+        progress: 100,
+        error: null
+      })
 
       // If Fly client is available, scale down the machine
       if (flyClient) {
@@ -121,12 +119,10 @@ export default defineEventHandler(async (event) => {
     } catch (error) {
       console.error(`Benchmark failed for region ${region}:`, error)
       
-      if (db) {
-        await db.prepare(`
-          INSERT INTO benchmark_results (benchmark_id, region, result, error, created_at)
-          VALUES (?, ?, ?, ?, datetime('now'))
-        `).bind(benchmarkId, region, JSON.stringify({}), (error as Error).message).run()
-      }
+      await updateBenchmarkResult(event, benchmarkId, region, {
+        error: (error as Error).message,
+        status: 'failed'
+      })
       
       // If Fly client is available, try to scale down even on error
       if (flyClient) {
@@ -147,13 +143,7 @@ export default defineEventHandler(async (event) => {
     const allCompleted = results.every(r => r.success || r.error)
     const status = allCompleted ? 'completed' : 'partial'
     
-    if (db) {
-      await db.prepare(`
-        UPDATE benchmarks 
-        SET status = ?, completed_at = datetime('now')
-        WHERE id = ?
-      `).bind(status, benchmarkId).run()
-    }
+    await updateBenchmarkStatus(event, benchmarkId, status, new Date().toISOString())
   })
 
   return {
@@ -167,12 +157,12 @@ export default defineEventHandler(async (event) => {
 
 // Run benchmark with retry logic (mimicking GitHub Actions workflow)
 async function runBenchmarkWithRetry(
+  event: H3Event,
   host: string,
   region: string,
   runs: number,
   label: string,
   token: string,
-  db: any,
   benchmarkId: string
 ): Promise<any> {
   const maxRetries = 20
@@ -199,13 +189,10 @@ async function runBenchmarkWithRetry(
     } catch (error) {
       console.warn(`Benchmark attempt ${attempt} failed for region ${region}:`, error)
       
-      // Update status in database
-      if (db) {
-        await db.prepare(`
-          INSERT INTO benchmark_results (benchmark_id, region, result, error, created_at)
-          VALUES (?, ?, ?, ?, datetime('now'))
-        `).bind(benchmarkId, region, JSON.stringify({}), `Attempt ${attempt} failed: ${(error as Error).message}`).run()
-      }
+      await updateBenchmarkResult(event, benchmarkId, region, {
+        error: `Attempt ${attempt} failed: ${(error as Error).message}`,
+        status: 'running'
+      })
       
       if (attempt === maxRetries) {
         throw new Error(`Benchmark failed after ${maxRetries} attempts: ${(error as Error).message}`)

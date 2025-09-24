@@ -1,3 +1,5 @@
+import { eq, asc } from 'drizzle-orm'
+
 export default defineEventHandler(async (event) => {
   const { id } = getRouterParams(event)
   
@@ -8,20 +10,12 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const db = event.context.cloudflare?.env?.DB
-  if (!db) {
-    throw createError({
-      statusCode: 500,
-      statusMessage: 'Database not available'
-    })
-  }
+  const db = useDb(event)
 
   // Get benchmark details
-  const benchmarkResult = await db.prepare(`
-    SELECT id, status, regions, runs, label, created_at, completed_at
-    FROM benchmarks 
-    WHERE id = ?
-  `).bind(id).first()
+  const benchmarkResult = await db.query.benchmarks.findFirst({
+    where: eq(tables.benchmarks.id, id)
+  })
 
   if (!benchmarkResult) {
     throw createError({
@@ -31,32 +25,30 @@ export default defineEventHandler(async (event) => {
   }
 
   // Get all results for this benchmark with enhanced status info
-  const resultsResult = await db.prepare(`
-    SELECT region, result, error, status, progress, created_at, updated_at
-    FROM benchmark_results 
-    WHERE benchmark_id = ?
-    ORDER BY created_at ASC
-  `).bind(id).all()
+  const results = await db.query.benchmarkResults.findMany({
+    where: eq(tables.benchmarkResults.benchmarkId, id),
+    orderBy: asc(tables.benchmarkResults.createdAt)
+  })
 
-  const results = resultsResult.results as any[] || []
+  const regions = JSON.parse(benchmarkResult.regions)
 
   return {
     benchmarkId: benchmarkResult.id,
     status: benchmarkResult.status,
-    regions: JSON.parse(benchmarkResult.regions as string),
+    regions,
     runs: benchmarkResult.runs,
     label: benchmarkResult.label,
-    createdAt: benchmarkResult.created_at,
-    completedAt: benchmarkResult.completed_at,
-    results: results.map((r: any) => ({
+    createdAt: benchmarkResult.createdAt,
+    completedAt: benchmarkResult.completedAt,
+    results: results.map((r) => ({
       region: r.region,
       success: !r.error && r.status === 'completed',
       status: r.status || 'unknown',
       progress: r.progress || 0,
-      result: r.result ? JSON.parse(r.result as string) : null,
+      result: r.result ? JSON.parse(r.result) : null,
       error: r.error,
-      createdAt: r.created_at,
-      updatedAt: r.updated_at
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt
     }))
   }
 })
