@@ -25,6 +25,11 @@ export default defineNuxtConfig({
     cloudflare: {
       deployConfig: true,
       wrangler: {
+        observability: {
+          logs: {
+            enabled: true,
+          }
+        },
         d1_databases: [
           {
             binding: 'DB',

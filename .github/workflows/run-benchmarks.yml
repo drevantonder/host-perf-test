@@ -225,16 +225,23 @@ jobs:
 
             // Per Region Snapshot (TTFB p75)
             lines.push("### Per Region Snapshot");
-            lines.push("| Region | Winner | TTFB p75 | Runner‑up | TTFB p75 | Factor |");
-            lines.push("|---|---|---:|---|---:|---:|");
+            lines.push("| Region | Winner | TTFB p75 | Runner‑up | TTFB p75 | Third | TTFB p75 | Factor |");
+            lines.push("|---|---|---:|---|---:|---|---:|---:|");
             for (const region of Array.from(regions).sort()) {
               const tableRaw = buildTableFromSeries(perRegionProvider[region] || {});
               const table = Object.fromEntries(Object.entries(tableRaw).filter(([k]) => recognizedProviders.has(k)));
               const { rows } = deltasForBest(table, "P75");
-              if (rows.length >= 2) {
+              if (rows.length >= 1) {
                 const srt = [...rows].sort((a,b) => a.ttfbP75 - b.ttfbP75);
-                const a = srt[0], b = srt[1];
-                lines.push(`| ${region} | ${labelWithIcon(a.host)} | ${fmtMs(a.ttfbP75)} | ${labelWithIcon(b.host)} | ${fmtMs(b.ttfbP75)} | ${(b.ttfbP75 / a.ttfbP75).toFixed(2)}x |`);
+                const a = srt[0], b = srt[1], c = srt[2];
+                const aHost = a ? labelWithIcon(a.host) : "—";
+                const aVal = a ? fmtMs(a.ttfbP75) : "—";
+                const bHost = b ? labelWithIcon(b.host) : "—";
+                const bVal = b ? fmtMs(b.ttfbP75) : "—";
+                const cHost = c ? labelWithIcon(c.host) : "—";
+                const cVal = c ? fmtMs(c.ttfbP75) : "—";
+                const factor = (a && b) ? `${(b.ttfbP75 / a.ttfbP75).toFixed(2)}x` : "—";
+                lines.push(`| ${region} | ${aHost} | ${aVal} | ${bHost} | ${bVal} | ${cHost} | ${cVal} | ${factor} |`);
               }
             }
             lines.push("");
