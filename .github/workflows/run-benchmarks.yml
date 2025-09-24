@@ -107,6 +107,17 @@ jobs:
               return host; // fallback for any other domains
             }
             const recognizedProviders = new Set(["workers.dev", "vercel.app", "netlify.app"]);
+            const ICONS = {
+              "workers.dev": "https://svgl.app/library/cloudflare-workers.svg",
+              "vercel.app": "https://svgl.app/library/vercel_dark.svg",
+              "netlify.app": "https://svgl.app/library/netlify.svg",
+            };
+            function iconHtml(provider, size = 16) {
+              const src = ICONS[provider] || "";
+              if (!src) return provider;
+              return `<img src="${src}" alt="${provider}" width="${size}" height="${size}" style="vertical-align:middle; margin-right:4px;">`;
+            }
+            function labelWithIcon(p) { return `${iconHtml(p)} ${p}`; }
 
             for (const it of items) {
               const region = (it.meta && it.meta.label) || "unknown";
@@ -189,57 +200,59 @@ jobs:
             lines.push("## Benchmark Summary");
             lines.push("");
 
-            // TL;DR using providers (p75)
-            lines.push("### TL;DR (p75)");
+            // TL;DR using providers (TTFB p75 only)
+            lines.push("### TL;DR");
             const overallProviderTableRaw = buildTableFromSeries(overallProvider);
             const overallProviderTable = Object.fromEntries(Object.entries(overallProviderTableRaw).filter(([k]) => recognizedProviders.has(k)));
             const { rows: overallProvRowsP75 } = deltasForBest(overallProviderTable, "P75");
             if (overallProvRowsP75.length >= 2) {
-              const tSorted = [...overallProvRowsP75].sort((a,b) => a.ttlbP75 - b.ttlbP75);
-              const f = tSorted[0], s = tSorted[1];
-              lines.push(`- Winner (TTLB p75): ${f.host} — ${fmtMs(f.ttlbP75)}ms vs ${s.host} ${fmtMs(s.ttlbP75)}ms (${(s.ttlbP75 / f.ttlbP75).toFixed(2)}x)`);
               const bSorted = [...overallProvRowsP75].sort((a,b) => a.ttfbP75 - b.ttfbP75);
-              const fb = bSorted[0], sb = bSorted[1] || fb;
-              lines.push(`- Winner (TTFB p75): ${fb.host} — ${fmtMs(fb.ttfbP75)}ms vs ${sb.host} ${fmtMs(sb.ttfbP75)}ms (${(sb.ttfbP75 / fb.ttfbP75).toFixed(2)}x)`);
+              const f = bSorted[0], s = bSorted[1];
+              lines.push(`- Winner (TTFB p75): ${labelWithIcon(f.host)} — ${fmtMs(f.ttfbP75)}ms vs ${labelWithIcon(s.host)} ${fmtMs(s.ttfbP75)}ms (${(s.ttfbP75 / f.ttfbP75).toFixed(2)}x)`);
+              const list = bSorted.map(r => `${labelWithIcon(r.host)} ${fmtMs(r.ttfbP75)}ms`).join(" | ");
+              lines.push(`- Providers: ${list}`);
+            } else if (overallProvRowsP75.length === 1) {
+              const f = overallProvRowsP75[0];
+              lines.push(`- Result (TTFB p75): ${labelWithIcon(f.host)} — ${fmtMs(f.ttfbP75)}ms`);
             } else {
               lines.push("- Not enough providers to compare.");
             }
             lines.push("");
 
-            // Per Region Snapshot (TTLB p75)
-            lines.push("### Per Region Snapshot (TTLB p75)");
-            lines.push("| Region | Winner | TTLB p75 | Runner‑up | TTLB p75 | Factor |");
+            // Per Region Snapshot (TTFB p75)
+            lines.push("### Per Region Snapshot");
+            lines.push("| Region | Winner | TTFB p75 | Runner‑up | TTFB p75 | Factor |");
             lines.push("|---|---|---:|---|---:|---:|");
             for (const region of Array.from(regions).sort()) {
               const tableRaw = buildTableFromSeries(perRegionProvider[region] || {});
               const table = Object.fromEntries(Object.entries(tableRaw).filter(([k]) => recognizedProviders.has(k)));
               const { rows } = deltasForBest(table, "P75");
               if (rows.length >= 2) {
-                const srt = [...rows].sort((a,b) => a.ttlbP75 - b.ttlbP75);
+                const srt = [...rows].sort((a,b) => a.ttfbP75 - b.ttfbP75);
                 const a = srt[0], b = srt[1];
-                lines.push(`| ${region} | ${a.host} | ${fmtMs(a.ttlbP75)} | ${b.host} | ${fmtMs(b.ttlbP75)} | ${(b.ttlbP75 / a.ttlbP75).toFixed(2)}x |`);
+                lines.push(`| ${region} | ${labelWithIcon(a.host)} | ${fmtMs(a.ttfbP75)} | ${labelWithIcon(b.host)} | ${fmtMs(b.ttfbP75)} | ${(b.ttfbP75 / a.ttfbP75).toFixed(2)}x |`);
               }
             }
             lines.push("");
 
-            // Overall Across Providers (compact)
-            lines.push("### Overall Across Providers");
-            lines.push("| Provider | TTFB p50 | TTFB p75 | TTFB p95 | TTLB p50 | TTLB p75 | TTLB p95 |");
-            lines.push("|---|---:|---:|---:|---:|---:|---:|");
-            for (const r of [...overallProvRowsP75].sort((a,b)=>a.ttlbP75-b.ttlbP75)) {
-              lines.push(`| ${r.host} | ${fmtMs(r.ttfbP50)} | ${fmtMs(r.ttfbP75)} | ${fmtMs(r.ttfbP95)} | ${fmtMs(r.ttlbP50)} | ${fmtMs(r.ttlbP75)} | ${fmtMs(r.ttlbP95)} |`);
+            // Provider Stats (TTFB-only, compact) in details
+            lines.push("<details><summary>Provider Stats (TTFB p75)</summary>");
+            lines.push("");
+            lines.push("| Provider | TTFB p50 | TTFB p75 | TTFB p95 |");
+            lines.push("|---|---:|---:|---:|");
+            for (const r of [...overallProvRowsP75].sort((a,b)=>a.ttfbP75-b.ttfbP75)) {
+              lines.push(`| ${labelWithIcon(r.host)} | ${fmtMs(r.ttfbP50)} | ${fmtMs(r.ttfbP75)} | ${fmtMs(r.ttfbP95)} |`);
             }
             lines.push("");
+            lines.push("</details>");
+            lines.push("");
 
-            // Aggregate Summary (shareable wording, p75)
+            // Aggregate Summary (TTFB p75 only)
             if (overallProvRowsP75.length >= 2) {
-              const tSorted = [...overallProvRowsP75].sort((a,b) => a.ttlbP75 - b.ttlbP75);
-              const f = tSorted[0], s = tSorted[1];
               const bSorted = [...overallProvRowsP75].sort((a,b) => a.ttfbP75 - b.ttfbP75);
-              const fb = bSorted[0], sb = bSorted[1] || fb;
+              const f = bSorted[0], s = bSorted[1];
               lines.push("### Aggregate Summary");
-              lines.push(`Final Verdict (TTLB p75): ${f.host} is ${(s.ttlbP75 / f.ttlbP75).toFixed(2)}x faster than ${s.host}.`);
-              lines.push(`Final Verdict (TTFB p75): ${fb.host} is ${(sb.ttfbP75 / fb.ttfbP75).toFixed(2)}x faster than ${sb.host}.`);
+              lines.push(`Final Verdict (TTFB p75): ${f.host} is ${(s.ttfbP75 / f.ttfbP75).toFixed(2)}x faster than ${s.host}.`);
               lines.push("");
             }
 

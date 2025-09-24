@@ -1,0 +1,19 @@
+{
+  "meta": { "label": "syd" },
+  "results": {
+    "https://host-perf-test-test-app.vercel.app/": [ {"ttfb": 180, "ttlb": 360}, {"ttfb": 175, "ttlb": 355} ],
+    "https://host-perf-test-test-app.vercel.app/api/posts": [ {"ttfb": 182, "ttlb": 362} ],
+    "https://host-perf-test-test-app.vercel.app/api/results": [ {"ttfb": 178, "ttlb": 358} ],
+    "https://host-perf-test-test-app.vercel.app/multiple-requests": [ {"ttfb": 185, "ttlb": 365} ],
+
+    "https://host-perf-test.drevan.workers.dev/": [ {"ttfb": 100, "ttlb": 280}, {"ttfb": 105, "ttlb": 285} ],
+    "https://host-perf-test.drevan.workers.dev/api/posts": [ {"ttfb": 102, "ttlb": 282} ],
+    "https://host-perf-test.drevan.workers.dev/api/results": [ {"ttfb": 98, "ttlb": 278} ],
+    "https://host-perf-test.drevan.workers.dev/multiple-requests": [ {"ttfb": 108, "ttlb": 288} ],
+
+    "https://host-perf-test.netlify.app/": [ {"ttfb": 210, "ttlb": 390}, {"ttfb": 205, "ttlb": 385} ],
+    "https://host-perf-test.netlify.app/api/posts": [ {"ttfb": 212, "ttlb": 392} ],
+    "https://host-perf-test.netlify.app/api/results": [ {"ttfb": 208, "ttlb": 388} ],
+    "https://host-perf-test.netlify.app/multiple-requests": [ {"ttfb": 215, "ttlb": 395} ]
+  }
+}
