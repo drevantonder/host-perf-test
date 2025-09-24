@@ -17,22 +17,37 @@ export type BenchmarkResult = {
 };
 
 export async function measureRun(url: string): Promise<Metrics> {
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({
+    headless: true,
+    args: ["--disable-dev-shm-usage"],
+  });
+
   const page = await browser.newPage();
   const client = await page.context().newCDPSession(page);
-
   await client.send("Network.enable");
 
-  return new Promise<Metrics>(async (resolve) => {
+  return await new Promise<Metrics>((resolve, reject) => {
     let startTime = 0;
     let ttfb = 0;
     let ttlb = 0;
     let mainRequestId: string | null = null;
 
+    const finish = async (err?: Error) => {
+      try {
+        await browser.close();
+      } catch {}
+      if (err) reject(err);
+      else resolve({ ttfb, ttlb });
+    };
+
+    const timer = setTimeout(() => {
+      finish(new Error(`Timeout navigating to ${url}`));
+    }, 15000);
+
     client.on("Network.requestWillBeSent", (params) => {
       if (params.type === "Document" && mainRequestId === null) {
         mainRequestId = params.requestId;
-        startTime = params.timestamp * 1000; // seconds → ms
+        startTime = params.timestamp * 1000;
       }
     });
 
@@ -44,13 +59,24 @@ export async function measureRun(url: string): Promise<Metrics> {
 
     client.on("Network.loadingFinished", (params) => {
       if (params.requestId === mainRequestId && startTime > 0) {
+        clearTimeout(timer);
         ttlb = params.timestamp * 1000 - startTime;
-        resolve({ ttfb, ttlb });
+        finish();
       }
     });
 
-    await page.goto(url, { waitUntil: "load" });
-    await browser.close();
+    client.on("Network.loadingFailed", (params) => {
+      if (params.requestId === mainRequestId) {
+        clearTimeout(timer);
+        finish(new Error(`Loading failed for ${url}: ${params.errorText || "unknown error"}`));
+      }
+    });
+
+    page.setDefaultNavigationTimeout(14000);
+    page.goto(url, { waitUntil: "load", timeout: 14000 }).catch((err) => {
+      clearTimeout(timer);
+      finish(err);
+    });
   });
 }
 
