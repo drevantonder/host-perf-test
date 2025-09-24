@@ -55,7 +55,7 @@ for (const it of items) {
       const u = new URL(url);
       host = u.host;
       route = u.pathname || "/";
-    } catch {}
+    } catch { }
     const arr = results[url] || [];
     perRegionRouteHost[region] = perRegionRouteHost[region] || {};
     perRegionRouteHost[region][route] = perRegionRouteHost[region][route] || {};
@@ -132,9 +132,9 @@ const overallProviderTableRaw = buildTableFromSeries(overallProvider);
 const overallProviderTable = Object.fromEntries(Object.entries(overallProviderTableRaw).filter(([k]) => recognizedProviders.has(k)));
 const { rows: overallProvRowsP75 } = deltasForBest(overallProviderTable, "P75");
 if (overallProvRowsP75.length >= 2) {
-  const bSorted = [...overallProvRowsP75].sort((a,b) => a.ttfbP75 - b.ttfbP75);
+  const bSorted = [...overallProvRowsP75].sort((a, b) => a.ttfbP75 - b.ttfbP75);
   const f = bSorted[0], s = bSorted[1];
-  lines.push(`- Winner (TTFB p75): ${labelWithIcon(f.host)} — ${fmtMs(f.ttfbP75)}ms vs ${labelWithIcon(s.host)} ${fmtMs(s.ttfbP75)}ms (${(s.ttfbP75 / f.ttfbP75).toFixed(2)}x)`);
+  lines.push(`- Winner (TTFB p75): ${labelWithIcon(f.host)} — ${fmtMs(f.ttfbP75)}ms`);
   const list = bSorted.map(r => `${labelWithIcon(r.host)} ${fmtMs(r.ttfbP75)}ms`).join(" | ");
   lines.push(`- Providers: ${list}`);
 } else if (overallProvRowsP75.length === 1) {
@@ -147,14 +147,14 @@ lines.push("");
 
 // Per Region Snapshot (TTFB p75)
 lines.push("### Per Region Snapshot");
-lines.push("| Region | Winner | TTFB p75 | Runner‑up | TTFB p75 | Third | TTFB p75 | Factor |");
+lines.push("| Region | Winner | TTFB p75 | Runner‑up | TTFB p75 | Third | TTFB p75 |");
 lines.push("|---|---|---:|---|---:|---|---:|---:|");
 for (const region of Array.from(regions).sort()) {
   const tableRaw = buildTableFromSeries(perRegionProvider[region] || {});
   const table = Object.fromEntries(Object.entries(tableRaw).filter(([k]) => recognizedProviders.has(k)));
   const { rows } = deltasForBest(table, "P75");
   if (rows.length >= 1) {
-    const srt = [...rows].sort((a,b) => a.ttfbP75 - b.ttfbP75);
+    const srt = [...rows].sort((a, b) => a.ttfbP75 - b.ttfbP75);
     const a = srt[0], b = srt[1], c = srt[2];
     const aHost = a ? labelWithIcon(a.host) : "—";
     const aVal = a ? fmtMs(a.ttfbP75) : "—";
@@ -162,8 +162,8 @@ for (const region of Array.from(regions).sort()) {
     const bVal = b ? fmtMs(b.ttfbP75) : "—";
     const cHost = c ? labelWithIcon(c.host) : "—";
     const cVal = c ? fmtMs(c.ttfbP75) : "—";
-    const factor = (a && b) ? `${(b.ttfbP75 / a.ttfbP75).toFixed(2)}x` : "—";
-    lines.push(`| ${region} | ${aHost} | ${aVal} | ${bHost} | ${bVal} | ${cHost} | ${cVal} | ${factor} |`);
+
+    lines.push(`| ${region} | ${aHost} | ${aVal} | ${bHost} | ${bVal} | ${cHost} | ${cVal} |`);
   }
 }
 lines.push("");
@@ -173,7 +173,7 @@ lines.push("<details><summary>Provider Stats (TTFB p75)</summary>");
 lines.push("");
 lines.push("| Provider | TTFB p50 | TTFB p75 | TTFB p95 |");
 lines.push("|---|---:|---:|---:|");
-for (const r of [...overallProvRowsP75].sort((a,b)=>a.ttfbP75-b.ttfbP75)) {
+for (const r of [...overallProvRowsP75].sort((a, b) => a.ttfbP75 - b.ttfbP75)) {
   lines.push(`| ${labelWithIcon(r.host)} | ${fmtMs(r.ttfbP50)} | ${fmtMs(r.ttfbP75)} | ${fmtMs(r.ttfbP95)} |`);
 }
 lines.push("");
@@ -182,7 +182,7 @@ lines.push("");
 
 // Aggregate Summary (TTFB p75 only)
 if (overallProvRowsP75.length >= 2) {
-  const bSorted = [...overallProvRowsP75].sort((a,b) => a.ttfbP75 - b.ttfbP75);
+  const bSorted = [...overallProvRowsP75].sort((a, b) => a.ttfbP75 - b.ttfbP75);
   const f = bSorted[0], s = bSorted[1];
   lines.push("### Aggregate Summary");
   lines.push(`Final Verdict (TTFB p75): ${f.host} is ${(s.ttfbP75 / f.ttfbP75).toFixed(2)}x faster than ${s.host}.`);
