@@ -25,6 +25,7 @@ export default defineNuxtConfig({
     cloudflare: {
       deployConfig: true,
       wrangler: {
+        compatibility_date: '2025-09-24',
         d1_databases: [
           {
             binding: 'DB',
