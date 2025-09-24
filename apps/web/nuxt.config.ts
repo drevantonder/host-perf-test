@@ -25,6 +25,7 @@ export default defineNuxtConfig({
     cloudflare: {
       deployConfig: true,
       wrangler: {
+        name: 'hosting-perf-web',
         observability: {
           logs: {
             enabled: true,
