@@ -75,7 +75,8 @@ jobs:
         with:
           path: artifacts
       - name: Merge and summarize
-        run: node .github/scripts/aggregate.js      - name: Upload combined.json
+        run: node .github/scripts/aggregate.js
+      - name: Upload combined.json
         uses: actions/upload-artifact@v4
         with:
           name: benchmark-combined
