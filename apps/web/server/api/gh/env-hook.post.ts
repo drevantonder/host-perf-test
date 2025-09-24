@@ -8,7 +8,7 @@ export default defineEventHandler(async (event) => {
   const appId = cfg.github?.appId || process.env.GITHUB_APP_ID || ''
   const defaultInstId = cfg.github?.defaultInstallationId || process.env.GITHUB_APP_INSTALLATION_ID || ''
   const privateKey = (cfg.github?.privateKey || process.env.GITHUB_APP_PRIVATE_KEY || '').trim()
-  const runnerHost = cfg.BENCHMARK_RUNNER_HOST || process.env.BENCHMARK_RUNNER_HOST || ''
+  const runnerHost = cfg.benchmarkRunnerHost || process.env.BENCHMARK_RUNNER_HOST || ''
 
   const ghEvent = getRequestHeader(event, 'x-github-event') || ''
   const sig = getRequestHeader(event, 'x-hub-signature-256') || ''
@@ -79,7 +79,7 @@ async function waitForHealth(host: string, region: string, timeoutMs = 180000, i
       })
       clearTimeout(t)
       if (res.ok) return true
-    } catch {}
+    } catch { }
     await new Promise(r => setTimeout(r, intervalMs))
   }
   return false
