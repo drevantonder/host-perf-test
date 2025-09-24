@@ -63,6 +63,37 @@
       <div v-if="statusMessage" class="text-sm text-gray-600">
         {{ statusMessage }}
       </div>
+
+      <!-- Per-region status details -->
+      <div v-if="isRunning && lastBenchmark?.results?.length" class="space-y-2">
+        <div 
+          v-for="result in lastBenchmark.results" 
+          :key="result.region"
+          class="flex items-center justify-between text-sm p-2 bg-gray-50 rounded"
+        >
+          <div class="flex items-center gap-2">
+            <span class="font-medium">{{ result.region.toUpperCase() }}</span>
+            <UBadge 
+              :color="getRegionStatusColor(result.status)" 
+              variant="subtle"
+              size="xs"
+            >
+              {{ result.status }}
+            </UBadge>
+          </div>
+          <div class="flex items-center gap-2">
+            <UProgress 
+              v-if="result.progress > 0" 
+              :value="result.progress" 
+              size="sm" 
+              class="w-20"
+            />
+            <span v-if="result.progress > 0" class="text-xs text-gray-500">
+              {{ result.progress }}%
+            </span>
+          </div>
+        </div>
+      </div>
     </UForm>
   </UCard>
 </template>
@@ -103,6 +134,17 @@ const statusColor = computed(() => {
     default: return 'gray'
   }
 })
+
+function getRegionStatusColor(status: string): string {
+  switch (status) {
+    case 'warming': return 'blue'
+    case 'running': return 'blue'
+    case 'completed': return 'green'
+    case 'failed': return 'red'
+    case 'scaling_down': return 'gray'
+    default: return 'gray'
+  }
+}
 
 async function triggerBenchmark() {
   isRunning.value = true

@@ -30,9 +30,9 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  // Get all results for this benchmark
+  // Get all results for this benchmark with enhanced status info
   const resultsResult = await db.prepare(`
-    SELECT region, result, error, created_at
+    SELECT region, result, error, status, progress, created_at, updated_at
     FROM benchmark_results 
     WHERE benchmark_id = ?
     ORDER BY created_at ASC
@@ -50,10 +50,13 @@ export default defineEventHandler(async (event) => {
     completedAt: benchmarkResult.completed_at,
     results: results.map((r: any) => ({
       region: r.region,
-      success: !r.error,
+      success: !r.error && r.status === 'completed',
+      status: r.status || 'unknown',
+      progress: r.progress || 0,
       result: r.result ? JSON.parse(r.result as string) : null,
       error: r.error,
-      createdAt: r.created_at
+      createdAt: r.created_at,
+      updatedAt: r.updated_at
     }))
   }
 })

@@ -29,12 +29,27 @@ This app serves the public site with an interactive benchmark interface and expo
 - No native modules.
 - D1 binding `DB` for benchmark data persistence.
 
+## Fly.io Integration
+The benchmark system can optionally integrate with Fly.io's Machines API to automatically scale benchmark runners:
+
+### Machine Scaling
+When `NUXT_FLY_API_TOKEN` is configured, the system will:
+1. **Warm up machines** - Start or create machines in each benchmark region before running tests
+2. **Wait for readiness** - Poll machine status until ready to receive requests
+3. **Run benchmarks** - Execute tests with retry logic (20 attempts, exponential backoff)
+4. **Scale down** - Stop machines after benchmark completion to minimize costs
+
+### Required Permissions
+The Fly API token needs the following permissions:
+- `machines:read` - List machines in the app
+- `machines:write` - Start/stop machines
+
 ## Environment Variables (NUXT_*)
 Nuxt runtimeConfig is populated from environment variables prefixed with `NUXT_`.
 Set these in the Cloudflare dashboard (Variables/Secrets) or via `wrangler secret put`:
 - `NUXT_BENCHMARK_RUNNER_HOST` → e.g. `host-perf-test.fly.dev`
 - `NUXT_BENCH_TOKEN` → Authentication token for benchmark runner
-- `NUXT_FLY_API_TOKEN` → Fly.io API token for scaling operations
+- `NUXT_FLY_API_TOKEN` → (Optional) Fly.io API token for machine scaling operations
 
 ## API Endpoints
 
