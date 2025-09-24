@@ -21,7 +21,18 @@ export default defineNuxtConfig({
   },
 
   nitro: {
-    preset: 'cloudflare'
+    preset: 'cloudflare',
+    cloudflare: {
+      wrangler: {
+        d1_databases: [
+          {
+            binding: 'DB',
+            database_name: 'host-perf-db',
+            database_id: '7f4305a3-b96f-489c-8976-4a7e8458698d'
+          }
+        ]
+      }
+    },
   },
 
   routeRules: {
