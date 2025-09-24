@@ -8,5 +8,23 @@ export default defineNuxtConfig({
     '@nuxt/image',
     '@nuxt/scripts',
     '@nuxt/ui'
-  ]
+  ],
+
+  runtimeConfig: {
+    benchmarkRunnerHost: '',
+    github: {
+      appId: '',
+      webhookSecret: '',
+      privateKey: '',
+      defaultInstallationId: ''
+    }
+  },
+
+  nitro: {
+    preset: 'cloudflare'
+  },
+
+  routeRules: {
+    '/api/gh/env-hook': { cache: false }
+  }
 })
