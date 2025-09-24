@@ -12,6 +12,8 @@ export default defineNuxtConfig({
 
   runtimeConfig: {
     benchmarkRunnerHost: '',
+    benchToken: '',
+    flyApiToken: '',
     github: {
       appId: '',
       webhookSecret: '',
