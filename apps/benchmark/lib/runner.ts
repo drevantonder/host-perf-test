@@ -1,3 +1,7 @@
+// Minimal ambient declaration for process to avoid Node types dep
+// (TSX runs this directly and ignores types.)
+declare var process: any;
+
 import { chromium } from "playwright";
 
 export type Metrics = { ttfb: number; ttlb: number };
@@ -14,25 +18,37 @@ export type BenchmarkResult = {
   resultsMap: Record<string, Metrics[]>;
   perUrlSummary: PerUrlSummary[];
   overallByHost: OverallByHost;
+  errorsMap: Record<string, string[]>;
 };
 
 export async function measureRun(url: string): Promise<Metrics> {
+  const args = ["--disable-dev-shm-usage"] as string[];
+  const noSandbox = String(process?.env?.PLAYWRIGHT_NO_SANDBOX || process?.env?.NO_SANDBOX || "").trim();
+  if (noSandbox === "1" || noSandbox.toLowerCase() === "true") {
+    args.push("--no-sandbox");
+  }
+
   const browser = await chromium.launch({
     headless: true,
-    args: ["--disable-dev-shm-usage"],
+    args,
   });
 
   const page = await browser.newPage();
   const client = await page.context().newCDPSession(page);
   await client.send("Network.enable");
 
+  const navTimeout = Math.max(1, Number(process?.env?.NAV_TIMEOUT_MS || 14000));
+
   return await new Promise<Metrics>((resolve, reject) => {
     let startTime = 0;
     let ttfb = 0;
     let ttlb = 0;
     let mainRequestId: string | null = null;
+    let finished = false;
 
     const finish = async (err?: Error) => {
+      if (finished) return;
+      finished = true;
       try {
         await browser.close();
       } catch {}
@@ -42,7 +58,7 @@ export async function measureRun(url: string): Promise<Metrics> {
 
     const timer = setTimeout(() => {
       finish(new Error(`Timeout navigating to ${url}`));
-    }, 15000);
+    }, navTimeout + 1000);
 
     client.on("Network.requestWillBeSent", (params) => {
       if (params.type === "Document" && mainRequestId === null) {
@@ -72,11 +88,13 @@ export async function measureRun(url: string): Promise<Metrics> {
       }
     });
 
-    page.setDefaultNavigationTimeout(14000);
-    page.goto(url, { waitUntil: "load", timeout: 14000 }).catch((err) => {
-      clearTimeout(timer);
-      finish(err);
-    });
+    page.setDefaultNavigationTimeout(navTimeout);
+    page
+      .goto(url, { waitUntil: "load", timeout: navTimeout })
+      .catch((err) => {
+        clearTimeout(timer);
+        finish(err);
+      });
   });
 }
 
@@ -87,23 +105,37 @@ export function percentile(values: number[], p: number): number {
   return sorted[idx];
 }
 
+function safeMax(values: number[]): number {
+  return values.length ? Math.max(...values) : 0;
+}
+
 export async function benchmark(urls: string[], runs = 5, log = true): Promise<BenchmarkResult> {
   const resultsMap: Record<string, Metrics[]> = {};
-  for (const u of urls) resultsMap[u] = [];
+  const errorsMap: Record<string, string[]> = {};
+  for (const u of urls) {
+    resultsMap[u] = [];
+    errorsMap[u] = [];
+  }
 
   for (let i = 0; i < runs; i++) {
     if (log) console.log(`\nRun ${i + 1}/${runs}`);
     const runEntries: { url: string; r: Metrics }[] = [];
 
     for (const url of urls) {
-      const r = await measureRun(url);
-      resultsMap[url].push(r);
-      runEntries.push({ url, r });
-      if (log)
-        console.log(`  ${url} → TTFB ${r.ttfb.toFixed(2)}ms, TTLB ${r.ttlb.toFixed(2)}ms`);
+      try {
+        const r = await measureRun(url);
+        resultsMap[url].push(r);
+        runEntries.push({ url, r });
+        if (log)
+          console.log(`  ${url} → TTFB ${r.ttfb.toFixed(2)}ms, TTLB ${r.ttlb.toFixed(2)}ms`);
+      } catch (err: any) {
+        const msg = String(err?.message || err);
+        errorsMap[url].push(msg);
+        if (log) console.error(`  ERROR ${url} → ${msg}`);
+      }
     }
 
-    if (log && urls.length >= 2) {
+    if (log && runEntries.length >= 2) {
       const ttfbSorted = [...runEntries].sort((a, b) => a.r.ttfb - b.r.ttfb);
       const ttlbSorted = [...runEntries].sort((a, b) => a.r.ttlb - b.r.ttlb);
       const bestTtfb = ttfbSorted[0];
@@ -141,15 +173,21 @@ export async function benchmark(urls: string[], runs = 5, log = true): Promise<B
       const ttlbVals = results.map((r) => r.ttlb);
 
       console.log(`\nSummary for ${url}`);
+      if (results.length === 0) {
+        const errs = errorsMap[url];
+        console.log(`  No successful runs. Errors: ${errs.join(" | ") || "none"}`);
+        console.log("-----");
+        continue;
+      }
       console.log(`  p50 TTFB: ${percentile(ttfbVals, 50).toFixed(2)} ms`);
       console.log(`  p75 TTFB: ${percentile(ttfbVals, 75).toFixed(2)} ms`);
       console.log(`  p95 TTFB: ${percentile(ttfbVals, 95).toFixed(2)} ms`);
-      console.log(`  max TTFB: ${Math.max(...ttfbVals).toFixed(2)} ms`);
+      console.log(`  max TTFB: ${safeMax(ttfbVals).toFixed(2)} ms`);
 
       console.log(`  p50 TTLB: ${percentile(ttlbVals, 50).toFixed(2)} ms`);
       console.log(`  p75 TTLB: ${percentile(ttlbVals, 75).toFixed(2)} ms`);
       console.log(`  p95 TTLB: ${percentile(ttlbVals, 95).toFixed(2)} ms`);
-      console.log(`  max TTLB: ${Math.max(...ttlbVals).toFixed(2)} ms`);
+      console.log(`  max TTLB: ${safeMax(ttlbVals).toFixed(2)} ms`);
       console.log("-----");
     }
   }
@@ -165,13 +203,13 @@ export async function benchmark(urls: string[], runs = 5, log = true): Promise<B
         p50: stat(ttfbVals, 50),
         p75: stat(ttfbVals, 75),
         p95: stat(ttfbVals, 95),
-        max: Math.max(...ttfbVals),
+        max: safeMax(ttfbVals),
       },
       ttlb: {
         p50: stat(ttlbVals, 50),
         p75: stat(ttlbVals, 75),
         p95: stat(ttlbVals, 95),
-        max: Math.max(...ttlbVals),
+        max: safeMax(ttlbVals),
       },
     };
   });
@@ -194,5 +232,5 @@ export async function benchmark(urls: string[], runs = 5, log = true): Promise<B
     ttlbP50: stat(vals.ttlb, 50),
   }));
 
-  return { resultsMap, perUrlSummary, overallByHost };
+  return { resultsMap, perUrlSummary, overallByHost, errorsMap };
 }

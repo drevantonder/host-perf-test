@@ -21,9 +21,11 @@ type BenchmarkJson = {
     commit: string | null;
     label: string | null;
     runs: number;
+    region?: string | null;
   };
   inputs: { urls: string[] };
   results: Record<string, Metrics[]>;
+  errors?: Record<string, string[]>;
   perUrlSummary: PerUrlSummary[];
   overallByHost: OverallByHost;
 };
@@ -80,7 +82,7 @@ async function main() {
   const wantJson = Boolean(args.json);
   const outPath = (args.out as string) || "";
 
-  const { resultsMap, perUrlSummary, overallByHost } = await benchmark(
+  const { resultsMap, perUrlSummary, overallByHost, errorsMap } = await benchmark(
     urls,
     runs,
     !wantJson // disable logs if printing JSON
@@ -93,9 +95,11 @@ async function main() {
         commit: process.env.GITHUB_SHA || null,
         label,
         runs,
+        region: process.env.FLY_REGION || null,
       },
       inputs: { urls },
       results: resultsMap,
+      errors: errorsMap,
       perUrlSummary,
       overallByHost,
     };

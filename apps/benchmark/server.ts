@@ -16,10 +16,10 @@ function ok(res: ServerResponse, obj: any) {
   res.end(payload);
 }
 
-function bad(res: ServerResponse, code: number, msg: string) {
+function bad(res: ServerResponse, code: number, msg: string, extra?: any) {
   res.statusCode = code;
   res.setHeader("content-type", "application/json; charset=utf-8");
-  res.end(JSON.stringify({ error: msg }));
+  res.end(JSON.stringify({ error: msg, ...extra }));
 }
 
 function parseUrls(s: string | null | undefined): string[] {
@@ -67,7 +67,7 @@ const server = createServer(async (req, res) => {
     if (!urls.length) urls = defaultUrls;
 
     try {
-      const { resultsMap, perUrlSummary, overallByHost } = await benchmark(
+      const { resultsMap, perUrlSummary, overallByHost, errorsMap } = await benchmark(
         urls,
         runs
       );
@@ -77,14 +77,40 @@ const server = createServer(async (req, res) => {
           commit: process.env.GITHUB_SHA || null,
           label,
           runs,
+          region: process.env.FLY_REGION || null,
         },
         inputs: { urls },
         results: resultsMap,
+        errors: errorsMap,
         perUrlSummary,
         overallByHost,
       });
     } catch (e: any) {
-      return bad(res, 500, String(e?.stack || e));
+      console.error("/run failed:", e?.stack || e);
+      const errMsg = String(e?.message || e);
+      const stack = String(e?.stack || "");
+      const emptyResults: Record<string, any[]> = {};
+      const errs: Record<string, string[]> = {};
+      for (const u of urls) {
+        emptyResults[u] = [];
+        errs[u] = [errMsg];
+      }
+      return ok(res, {
+        meta: {
+          timestamp: new Date().toISOString(),
+          commit: process.env.GITHUB_SHA || null,
+          label,
+          runs,
+          region: process.env.FLY_REGION || null,
+          error: errMsg,
+        },
+        inputs: { urls },
+        results: emptyResults,
+        errors: errs,
+        perUrlSummary: [],
+        overallByHost: [],
+        debug: { stack },
+      });
     }
   }
 
