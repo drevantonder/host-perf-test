@@ -134,9 +134,9 @@ const { rows: overallProvRowsP75 } = deltasForBest(overallProviderTable, "P75");
 if (overallProvRowsP75.length >= 2) {
   const bSorted = [...overallProvRowsP75].sort((a, b) => a.ttfbP75 - b.ttfbP75);
   const f = bSorted[0], s = bSorted[1];
-  lines.push(`- Winner (TTFB p75): ${labelWithIcon(f.host)} — ${fmtMs(f.ttfbP75)}ms`);
+  lines.push(`- Winner (TTFB p75): ${labelWithIcon(f.host)}`);
   const list = bSorted.map(r => `${labelWithIcon(r.host)} ${fmtMs(r.ttfbP75)}ms`).join(" | ");
-  lines.push(`- Providers: ${list}`);
+  lines.push(`- ${list}`);
 } else if (overallProvRowsP75.length === 1) {
   const f = overallProvRowsP75[0];
   lines.push(`- Result (TTFB p75): ${labelWithIcon(f.host)} — ${fmtMs(f.ttfbP75)}ms`);
@@ -148,7 +148,7 @@ lines.push("");
 // Per Region Snapshot (TTFB p75)
 lines.push("### Per Region Snapshot");
 lines.push("| Region | Winner | TTFB p75 | Runner‑up | TTFB p75 | Third | TTFB p75 |");
-lines.push("|---|---|---:|---|---:|---|---:|---:|");
+lines.push("|---|---|---:|---|---:|---|---:|");
 for (const region of Array.from(regions).sort()) {
   const tableRaw = buildTableFromSeries(perRegionProvider[region] || {});
   const table = Object.fromEntries(Object.entries(tableRaw).filter(([k]) => recognizedProviders.has(k)));
