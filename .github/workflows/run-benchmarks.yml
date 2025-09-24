@@ -103,9 +103,10 @@ jobs:
               if (!host) return "unknown";
               if (host.endsWith(".workers.dev")) return "workers.dev";
               if (host.endsWith(".vercel.app")) return "vercel.app";
+              if (host.endsWith(".netlify.app")) return "netlify.app";
               return host; // fallback for any other domains
             }
-            const recognizedProviders = new Set(["workers.dev", "vercel.app"]);
+            const recognizedProviders = new Set(["workers.dev", "vercel.app", "netlify.app"]);
 
             for (const it of items) {
               const region = (it.meta && it.meta.label) || "unknown";

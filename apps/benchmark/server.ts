@@ -31,14 +31,21 @@ function parseUrls(s: string | null | undefined): string[] {
 }
 
 const defaultUrls = [
+  // Vercel
   "https://host-perf-test-test-app.vercel.app/",
   "https://host-perf-test-test-app.vercel.app/api/posts",
   "https://host-perf-test-test-app.vercel.app/api/results",
   "https://host-perf-test-test-app.vercel.app/multiple-requests",
+  // Cloudflare Workers
   "https://host-perf-test.drevan.workers.dev/",
   "https://host-perf-test.drevan.workers.dev/api/posts",
   "https://host-perf-test.drevan.workers.dev/api/results",
   "https://host-perf-test.drevan.workers.dev/multiple-requests",
+  // Netlify
+  "https://host-perf-test.netlify.app/",
+  "https://host-perf-test.netlify.app/api/posts",
+  "https://host-perf-test.netlify.app/api/results",
+  "https://host-perf-test.netlify.app/multiple-requests",
 ];
 
 const server = createServer(async (req, res) => {
