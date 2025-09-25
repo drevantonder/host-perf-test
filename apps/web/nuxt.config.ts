@@ -16,6 +16,12 @@ export default defineNuxtConfig({
     benchmarkRunnerHost: '',
     benchToken: '',
     flyApiToken: '',
+    githubToken: '',
+    githubOwner: '',
+    githubRepo: '',
+    public: {
+      siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+    }
   },
 
   nitro: {

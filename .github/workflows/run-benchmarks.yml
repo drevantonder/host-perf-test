@@ -5,13 +5,29 @@ on:
     workflows: ["Deploy Benchmark Runner"]
     types: [completed]
   workflow_dispatch:
+    inputs:
+      regions:
+        description: 'Space-separated list of regions to test (e.g., iad lhr syd)'
+        required: false
+        default: 'iad lhr syd'
+      runs:
+        description: 'Number of runs per region'
+        required: false
+        default: '10'
+      label:
+        description: 'Label for the benchmark run'
+        required: false
+        default: 'github-action'
+      callback_url:
+        description: 'URL to call with results when complete'
+        required: false
 
 permissions:
   contents: read
 
 env:
   APP_NAME: host-perf-test
-  REGIONS: 'iad lhr syd'
+  REGIONS: ${{ inputs.regions || 'iad lhr syd' }}
 
 jobs:
   run:
@@ -49,10 +65,12 @@ jobs:
           APP_HOST: ${{ steps.host.outputs.host }}
           BENCH_TOKEN: ${{ secrets.BENCH_TOKEN }}
         run: |
+          RUNS=${{ inputs.runs || '10' }}
+          LABEL=${{ inputs.label || matrix.region }}
           curl -fsS --retry 20 --retry-delay 5 --retry-all-errors --connect-timeout 5 --max-time 120 \
             -H "fly-prefer-region: ${{ matrix.region }}" \
             -H "Authorization: Bearer $BENCH_TOKEN" \
-            "https://$APP_HOST/run?runs=10&label=${{ matrix.region }}" \
+            "https://$APP_HOST/run?runs=$RUNS&label=$LABEL" \
             -o result-${{ matrix.region }}.json
       - name: Scale to zero
         continue-on-error: true
@@ -85,3 +103,15 @@ jobs:
           path: combined.json
       - name: Job Summary
         run: cat SUMMARY.md >> $GITHUB_STEP_SUMMARY
+      - name: Send results to callback URL
+        if: ${{ inputs.callback_url != '' }}
+        run: |
+          if [ -f "combined.json" ]; then
+            curl -X POST \
+              -H "Content-Type: application/json" \
+              -d @combined.json \
+              "${{ inputs.callback_url }}"
+          else
+            echo "No combined.json file found to send"
+            exit 1
+          fi
