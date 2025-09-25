@@ -19,5 +19,3 @@ export const useDb = (event: H3Event) => {
   return drizzle(cloudflare.env.DB as D1Database, { schema });
 }
 
-export type Benchmark = typeof schema.benchmarks.$inferSelect
-export type BenchmarkResult = typeof schema.benchmarkResults.$inferSelect

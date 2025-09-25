@@ -13,9 +13,6 @@ export default defineNuxtConfig({
   css: ['~/assets/css/main.css'],
 
   runtimeConfig: {
-    benchmarkRunnerHost: '',
-    benchToken: '',
-    flyApiToken: '',
     githubToken: '',
     githubOwner: '',
     githubRepo: '',
