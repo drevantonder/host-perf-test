@@ -109,22 +109,22 @@ jobs:
           path: combined.json
       - name: Job Summary
         run: cat SUMMARY.md >> $GITHUB_STEP_SUMMARY
-- name: Send results to callback URL
-      if: ${{ inputs.callback_url != '' }}
-      env:
-        CALLBACK_URL: ${{ inputs.callback_url }}
-        BENCHMARK_ID: ${{ env.BENCHMARK_ID }}
-      run: |
-        if [ -f "combined.json" ]; then
-          URL="$CALLBACK_URL"
-          if [[ "$URL" != *"?benchmarkId="* ]]; then
-            URL="$URL?benchmarkId=$BENCHMARK_ID"
+      - name: Send results to callback URL
+        if: ${{ inputs.callback_url != '' }}
+        env:
+          CALLBACK_URL: ${{ inputs.callback_url }}
+          BENCHMARK_ID: ${{ env.BENCHMARK_ID }}
+        run: |
+          if [ -f "combined.json" ]; then
+            URL="$CALLBACK_URL"
+            if [[ "$URL" != *"?benchmarkId="* ]]; then
+              URL="$URL?benchmarkId=$BENCHMARK_ID"
+            fi
+            curl -X POST \
+              -H "Content-Type: application/json" \
+              -d @combined.json \
+              "$URL"
+          else
+            echo "No combined.json file found to send"
+            exit 1
           fi
-          curl -X POST \
-            -H "Content-Type: application/json" \
-            -d @combined.json \
-            "$URL"
-        else
-          echo "No combined.json file found to send"
-          exit 1
-        fi
