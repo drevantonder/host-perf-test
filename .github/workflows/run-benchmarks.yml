@@ -21,10 +21,6 @@ on:
       callback_url:
         description: 'URL to call with results when complete'
         required: false
-      benchmarkId:
-        description: 'ID for the benchmark run'
-        required: false
-        default: '${{ github.run_id }}'
 
 permissions:
   contents: read
@@ -113,17 +109,12 @@ jobs:
         if: ${{ inputs.callback_url != '' }}
         env:
           CALLBACK_URL: ${{ inputs.callback_url }}
-          BENCHMARK_ID: ${{ env.BENCHMARK_ID }}
         run: |
           if [ -f "combined.json" ]; then
-            URL="$CALLBACK_URL"
-            if [[ "$URL" != *"?benchmarkId="* ]]; then
-              URL="$URL?benchmarkId=$BENCHMARK_ID"
-            fi
             curl -X POST \
               -H "Content-Type: application/json" \
               -d @combined.json \
-              "$URL"
+              "$CALLBACK_URL"
           else
             echo "No combined.json file found to send"
             exit 1
