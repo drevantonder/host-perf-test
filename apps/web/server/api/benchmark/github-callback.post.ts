@@ -29,6 +29,8 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  console.log(JSON.stringify(body))
+
   // TODO: Do something with returned data
 
   return {

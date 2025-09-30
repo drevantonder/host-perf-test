@@ -26,7 +26,13 @@ export default defineEventHandler(async (event) => {
     const githubClient = new GitHubClient(githubToken, githubOwner, githubRepo)
 
     // Build callback URL
-    const callbackUrl = `${config.public.siteUrl || 'http://localhost:3000'}/api/benchmark/github-callback?benchmarkId=${benchmarkId}`
+    const { siteUrl } = useRuntimeConfig(event).public
+    if (!siteUrl) throw new Error('Public site url is required for GitHub Action callback')
+
+    // Use URL to safely join and append query params
+    const callback = new URL('/api/benchmark/github-callback', siteUrl)
+    callback.searchParams.set('benchmarkId', benchmarkId)
+    const callbackUrl = callback.toString()
 
     // Trigger GitHub workflow
     await githubClient.triggerWorkflow(
@@ -45,7 +51,7 @@ export default defineEventHandler(async (event) => {
       status: 'running',
       regions,
       runs,
-      message: 'Benchmark started via GitHub Actions. Poll /api/benchmark/status for updates.'
+      message: 'Benchmark started via GitHub Actions.'
     }
 
   } catch (error) {

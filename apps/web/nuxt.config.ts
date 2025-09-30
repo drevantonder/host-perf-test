@@ -17,7 +17,7 @@ export default defineNuxtConfig({
     githubOwner: '',
     githubRepo: '',
     public: {
-      siteUrl: process.env.NUXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+      siteUrl: process.env.NUXT_PUBLIC_SITE_URL,
     }
   },
 
@@ -32,6 +32,14 @@ export default defineNuxtConfig({
     database: {
       type: 'd1',
       bindingName: 'DB'
+    }
+  },
+
+  vite: {
+    server: {
+      allowedHosts: [
+        'recommendable-versie-recapitulatory.ngrok-free.dev'
+      ]
     }
   }
 })
