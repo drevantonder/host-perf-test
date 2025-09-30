@@ -13,7 +13,8 @@ const files = fs.readdirSync(dir, { withFileTypes: true })
   .flatMap(d => d.isDirectory() ? fs.readdirSync(path.join(dir, d.name)).map(f => path.join(dir, d.name, f)) : [path.join(dir, d.name)])
   .filter(f => f.endsWith(".json"));
 const items = files.map(f => JSON.parse(fs.readFileSync(f, "utf8")));
-const combined = { items };
+const benchmarkId = process.env.BENCHMARK_ID || `${Date.now()}`;
+const combined = { items, benchmarkId };
 fs.writeFileSync("combined.json", JSON.stringify(combined, null, 2));
 
 const regions = new Set();

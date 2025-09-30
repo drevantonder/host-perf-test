@@ -10,6 +10,7 @@
     "postinstall": "nuxt prepare",
     "drizzle:push": "drizzle-kit push",
     "drizzle:generate": "drizzle-kit generate",
+    "drizzle:migrate": "drizzle-kit migrate",
     "drizzle:studio": "drizzle-kit studio"
   },
   "dependencies": {
